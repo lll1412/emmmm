@@ -1,0 +1,14 @@
+[package]
+name = "example"
+version = "0.1.0"
+authors = ["lll1412 <920595557@qq.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+#actix-web = "2.0"
+#actix-rt = "1.0"
+#structopt = "0.2.15"
+#colored = "2.0.0"
+#amethyst  = "0.15.3"
