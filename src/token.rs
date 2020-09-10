@@ -2,7 +2,7 @@ use std::fmt;
 
 pub const EOF: char = '\u{0}';
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Token {
     /// 非法字符
     Illegal(char),
@@ -85,7 +85,7 @@ impl Token {
             "if" => Token::If,
             "else" => Token::Else,
             "return" => Token::Return,
-            id => Token::Ident(id.to_string())
+            id => Token::Ident(id.to_string()),
         }
     }
 }
@@ -93,40 +93,40 @@ impl Token {
 impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Token::Illegal(ch) => { write!(f, "ILLEGAL: {}", ch) }
-            Token::Eof => { write!(f, "EOF") }
-            Token::Ident(id) => { write!(f, "{}", id) }
-            Token::Int(int) => { write!(f, "{}", int) }
-            Token::Float(float) => { write!(f, "{}", float) }
-            Token::String(string) => { write!(f, "\"{}\"", string) }
-            Token::Assign => { write!(f, "=") }
-            Token::Plus => { write!(f, "+") }
-            Token::Minus => { write!(f, "-") }
-            Token::Not => { write!(f, "!") }
-            Token::Asterisk => { write!(f, "*") }
-            Token::Slash => { write!(f, "/") }
-            Token::Lt => { write!(f, "<") }
-            Token::Gt => { write!(f, ">") }
-            Token::Eq => { write!(f, "==") }
-            Token::NotEq => { write!(f, "!=") }
-            Token::Le => { write!(f, "<=") }
-            Token::Ge => { write!(f, ">=") }
-            Token::Comma => { write!(f, ",") }
-            Token::Colon => { write!(f, ":") }
-            Token::Semicolon => { write!(f, ";") }
-            Token::Lparen => { write!(f, "(") }
-            Token::Rparen => { write!(f, ")") }
-            Token::Lbrace => { write!(f, "{{") }
-            Token::Rbrace => { write!(f, "}}") }
-            Token::Lbracket => { write!(f, "[") }
-            Token::Rbracket => { write!(f, "]") }
-            Token::Function => { write!(f, "fun") }
-            Token::Let => { write!(f, "let") }
-            Token::True => { write!(f, "true") }
-            Token::False => { write!(f, "false") }
-            Token::If => { write!(f, "if") }
-            Token::Else => { write!(f, "else") }
-            Token::Return => { write!(f, "return") }
+            Token::Illegal(ch) => write!(f, "ILLEGAL: {}", ch),
+            Token::Eof => write!(f, "EOF"),
+            Token::Ident(id) => write!(f, "Ident({})", id),
+            Token::Int(int) => write!(f, "Int({})", int),
+            Token::Float(float) => write!(f, "Float({})", float),
+            Token::String(string) => write!(f, "String(\"{}\")", string),
+            Token::Assign => write!(f, "="),
+            Token::Plus => write!(f, "+"),
+            Token::Minus => write!(f, "-"),
+            Token::Not => write!(f, "!"),
+            Token::Asterisk => write!(f, "*"),
+            Token::Slash => write!(f, "/"),
+            Token::Lt => write!(f, "<"),
+            Token::Gt => write!(f, ">"),
+            Token::Eq => write!(f, "=="),
+            Token::NotEq => write!(f, "!="),
+            Token::Le => write!(f, "<="),
+            Token::Ge => write!(f, ">="),
+            Token::Comma => write!(f, ","),
+            Token::Colon => write!(f, ":"),
+            Token::Semicolon => write!(f, ";"),
+            Token::Lparen => write!(f, "("),
+            Token::Rparen => write!(f, ")"),
+            Token::Lbrace => write!(f, "{{"),
+            Token::Rbrace => write!(f, "}}"),
+            Token::Lbracket => write!(f, "["),
+            Token::Rbracket => write!(f, "]"),
+            Token::Function => write!(f, "fun"),
+            Token::Let => write!(f, "let"),
+            Token::True => write!(f, "true"),
+            Token::False => write!(f, "false"),
+            Token::If => write!(f, "if"),
+            Token::Else => write!(f, "else"),
+            Token::Return => write!(f, "return"),
         }
     }
 }

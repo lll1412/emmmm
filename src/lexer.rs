@@ -1,8 +1,6 @@
-use std::str::Chars;
 use crate::token::*;
 use std::iter::Peekable;
-use std::mem;
-
+use std::str::Chars;
 
 pub struct Lexer {
     input: String,
@@ -13,7 +11,8 @@ pub struct Lexer {
 
 impl Lexer {
     pub fn new(input: String) -> Self {
-        let chars = unsafe { mem::transmute(input.chars().peekable()) };
+        let chars = unsafe { std::mem::transmute(input.chars().peekable()) };
+        let input = input.to_string();
         let mut lexer = Self {
             input,
             position: 0,
@@ -23,7 +22,6 @@ impl Lexer {
         lexer.read_char();
         lexer
     }
-
 
     pub fn next_token(&mut self) -> Token {
         self.skip_whitespace();
@@ -60,19 +58,21 @@ impl Lexer {
                 }
             }
             EOF => Token::Eof,
-            ch => return if is_letter(ch) {
-                let id = self.read_identifier();
-                Token::lookup_id(id)
-            } else if is_digit(ch) {
-                let num = self.read_number();
-                if num.contains('.') {
-                    Token::Float(num.to_string())
+            ch => {
+                return if is_letter(ch) {
+                    let id = self.read_identifier();
+                    Token::lookup_id(id)
+                } else if is_digit(ch) {
+                    let num = self.read_number();
+                    if num.contains('.') {
+                        Token::Float(num.to_string())
+                    } else {
+                        Token::Int(num.to_string())
+                    }
                 } else {
-                    Token::Int(num.to_string())
+                    Token::Illegal(ch)
                 }
-            } else {
-                Token::Illegal(ch)
-            },
+            }
         };
         self.read_char();
         token
@@ -106,7 +106,11 @@ impl Lexer {
     }
     //读取一个字符
     fn read_char(&mut self) {
-        self.position += if self.ch == EOF { 0 } else { self.ch.len_utf8() };
+        self.position += if self.ch == EOF {
+            0
+        } else {
+            self.ch.len_utf8()
+        };
         self.ch = self.chars.next().unwrap_or(EOF);
     }
     //查看字符
@@ -223,10 +227,10 @@ mod token_test {
             Token::NotEq,
             Token::Int("9".to_string()),
             Token::Semicolon,
-            Token::Eof
+            Token::Eof,
         ];
 
-        let mut lexer = Lexer::new(String::from(input));
+        let mut lexer = Lexer::new(input.to_string());
         for (i, expected_token) in tests.iter().enumerate() {
             let token = lexer.next_token();
             // println!("{:?}", token);
