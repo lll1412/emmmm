@@ -1,5 +1,2 @@
-mod ast;
-mod lexer;
-mod parser;
+mod core;
 pub mod repl;
-mod token;

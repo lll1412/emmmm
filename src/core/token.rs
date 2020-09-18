@@ -21,7 +21,7 @@ pub enum Token {
     /// -
     Minus,
     /// !
-    Not,
+    Bang,
     /// *
     Asterisk,
     /// /
@@ -102,7 +102,7 @@ impl fmt::Display for Token {
             Token::Assign => write!(f, "="),
             Token::Plus => write!(f, "+"),
             Token::Minus => write!(f, "-"),
-            Token::Not => write!(f, "!"),
+            Token::Bang => write!(f, "!"),
             Token::Asterisk => write!(f, "*"),
             Token::Slash => write!(f, "/"),
             Token::Lt => write!(f, "<"),
