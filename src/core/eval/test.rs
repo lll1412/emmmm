@@ -199,7 +199,7 @@ mod tests {
                 ),
             ),
             (
-                &read_from_file("test_return_if_error.js"),
+                &read_from_file("test_return_if_error.my"),
                 EvalError::UnknownBinaryOperator(
                     BinaryOperator::Plus,
                     Object::Boolean(true),
@@ -218,7 +218,7 @@ mod tests {
             ("return 10;9;", Object::Integer(10)),
             ("return 2 * 5;9;", Object::Integer(10)),
             ("9;return 2 * 5;9;", Object::Integer(10)),
-            (&read_from_file("test_return_if.js"), Object::Integer(10)),
+            (&read_from_file("test_return_if.my"), Object::Integer(10)),
         ];
         check_input(&inputs);
     }
