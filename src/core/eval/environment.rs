@@ -47,4 +47,9 @@ impl Environment {
             }
         }
     }
+
+    pub fn keys(&self) -> Vec<String> {
+        let keys = self.store.keys();
+        keys.cloned().collect()
+    }
 }

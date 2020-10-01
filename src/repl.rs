@@ -1,10 +1,12 @@
-use crate::core::eval;
-use crate::core::parser::Parser;
-use eval::{environment, evaluator};
 use std::cell::RefCell;
 use std::io;
 use std::io::Write;
 use std::rc::Rc;
+
+use eval::{environment, evaluator};
+
+use crate::core::eval;
+use crate::core::parser::Parser;
 
 const PROMPT: &str = ">> ";
 
@@ -21,8 +23,9 @@ pub fn start() {
             println!("Bye!");
             return;
         }
+
         if input == "env\r\n" {
-            println!("{:#?}", env.borrow());
+            println!("Exists Variables: {:?}", env.borrow().keys());
             continue;
         }
 
