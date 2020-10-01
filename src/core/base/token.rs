@@ -5,7 +5,7 @@ pub const EOF: char = '\u{0}';
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Token {
     /// 非法字符
-    Illegal(char),
+    Illegal,
     /// End Of File
     Eof,
     //标识符和字面量
@@ -59,7 +59,7 @@ pub enum Token {
     Rbracket,
 
     //关键字
-    /// fun
+    /// fn
     Function,
     /// let
     Let,
@@ -78,7 +78,7 @@ pub enum Token {
 impl Token {
     pub fn lookup_id(key: &str) -> Self {
         match key {
-            "fun" => Token::Function,
+            "fn" => Token::Function,
             "let" => Token::Let,
             "true" => Token::True,
             "false" => Token::False,
@@ -93,7 +93,7 @@ impl Token {
 impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Token::Illegal(ch) => write!(f, "ILLEGAL: {}", ch),
+            Token::Illegal => write!(f, "ILLEGAL"),
             Token::Eof => write!(f, "EOF"),
             Token::Ident(id) => write!(f, "Ident({})", id),
             Token::Int(int) => write!(f, "Int({})", int),
@@ -120,7 +120,7 @@ impl fmt::Display for Token {
             Token::Rbrace => write!(f, "}}"),
             Token::Lbracket => write!(f, "["),
             Token::Rbracket => write!(f, "]"),
-            Token::Function => write!(f, "fun"),
+            Token::Function => write!(f, "fn"),
             Token::Let => write!(f, "let"),
             Token::True => write!(f, "true"),
             Token::False => write!(f, "false"),

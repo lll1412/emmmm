@@ -1,35 +1,44 @@
+use crate::core::eval;
 use crate::core::parser::Parser;
+use eval::{environment, evaluator};
+use std::cell::RefCell;
 use std::io;
 use std::io::Write;
+use std::rc::Rc;
 
 const PROMPT: &str = ">> ";
 
 pub fn start() {
+    let env = Rc::new(RefCell::new(environment::Environment::new()));
+    let reader = io::stdin();
     loop {
         print!("{}", PROMPT);
         io::stdout().flush().unwrap();
-        let reader = io::stdin();
         let mut input: String = String::new();
 
         let i = reader.read_line(&mut input).unwrap();
-
-        if i == 0 || input == "exit\n" {
+        if i == 0 || input == "exit\r\n" {
             println!("Bye!");
             return;
         }
+        if input == "env\r\n" {
+            println!("{:#?}", env.borrow());
+            continue;
+        }
 
-        let mut parser = Parser::from(input);
+        let mut parser = Parser::from(&input);
         let program = parser.parse_program();
         let errors = parser.errors();
-        if errors.len() != 0 {
+        if !errors.is_empty() {
             println!("parser errors:");
             for err in errors {
                 println!("\t{:?}", err);
             }
         } else {
-            let statements = program.statements;
-            for statement in statements {
-                println!("{}", statement);
+            let result = evaluator::eval(&program, Rc::clone(&env));
+            match result {
+                Ok(object) => println!("{}", object),
+                Err(err) => eprintln!("{}", err),
             }
         }
     }

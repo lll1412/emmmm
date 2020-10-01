@@ -1,8 +1,79 @@
 #[cfg(test)]
 mod tests {
-    use crate::core::{ast::*, lexer::*, parser::Parser};
     use BinaryOperator::*;
     use Expression::*;
+
+    use crate::core::base::ast::{BlockStatement, Expression};
+    use crate::core::{base::ast::*, lexer::*, parser::Parser};
+
+    #[test]
+    fn test_something() {
+        let inputs = "let add = fn(a,b) { a + b; }; add(2,4);";
+        let mut parser = Parser::from(inputs);
+        let program = parser.parse_program();
+        // dbg!(program);
+        println!("{}", program);
+        check_parser_error(parser);
+    }
+
+    #[test]
+    fn test_hash_literal() {
+        let inputs = &[(
+            r#"{"one":1, "two":2, "three":3}"#,
+            Expression::HashLiteral(vec![
+                (
+                    Expression::StringLiteral("one".to_string()),
+                    Expression::IntLiteral(1),
+                ),
+                (
+                    Expression::StringLiteral("two".to_string()),
+                    Expression::IntLiteral(2),
+                ),
+                (
+                    Expression::StringLiteral("three".to_string()),
+                    Expression::IntLiteral(3),
+                ),
+            ]),
+        )];
+        test_parse_str(inputs);
+    }
+
+    #[test]
+    fn test_index_expression() {
+        let tests = [(
+            "myArray[1+3]".to_string(),
+            Expression::Index(
+                Box::new(Expression::Identifier("myArray".to_string())),
+                Box::new(Expression::Binary(
+                    BinaryOperator::Plus,
+                    Box::new(Expression::IntLiteral(1)),
+                    Box::new(Expression::IntLiteral(3)),
+                )),
+            ),
+        )];
+        test_parse(&tests);
+    }
+
+    #[test]
+    fn test_array_literal() {
+        let tests = [(
+            "[1, 2 * 2, 3 + 3]".to_string(),
+            Expression::ArrayLiteral(vec![
+                Expression::IntLiteral(1),
+                Expression::Binary(
+                    BinaryOperator::Mul,
+                    Box::new(Expression::IntLiteral(2)),
+                    Box::new(Expression::IntLiteral(2)),
+                ),
+                Expression::Binary(
+                    BinaryOperator::Plus,
+                    Box::new(Expression::IntLiteral(3)),
+                    Box::new(Expression::IntLiteral(3)),
+                ),
+            ]),
+        )];
+        test_parse(&tests);
+    }
 
     #[test]
     fn test_call_expression() {
@@ -38,9 +109,19 @@ mod tests {
 
     fn test_parse(data: &[(String, Expression)]) {
         for (input, expected) in data {
-            let mut parser = Parser::from(input.to_string());
+            let mut parser = Parser::from(input);
             let program = parser.parse_program();
-            println!("{}", program);
+            // println!("{:#?}", program.statements[0]);
+            // println!("{:#?}", expected);
+            check_parser_error(parser);
+            assert_eq!(program.to_string(), expected.to_string());
+        }
+    }
+
+    fn test_parse_str(data: &[(&str, Expression)]) {
+        for (input, expected) in data {
+            let mut parser = Parser::from(input);
+            let program = parser.parse_program();
             check_parser_error(parser);
             assert_eq!(program.to_string(), expected.to_string());
         }
@@ -50,8 +131,8 @@ mod tests {
     fn test_function_literal_parsing() {
         let tests = [
             (
-                "fun(x, y) { x=1; x + y; }".to_string(),
-                Expression::Fun(
+                "fn(x, y) { x=1; x + y; }".to_string(),
+                Expression::FunctionLiteral(
                     vec!["x".to_string(), "y".to_string()],
                     BlockStatement {
                         statements: vec![
@@ -70,8 +151,8 @@ mod tests {
                 ),
             ),
             (
-                "fun() { return 1;}".to_string(),
-                Expression::Fun(
+                "fn() { return 1;}".to_string(),
+                Expression::FunctionLiteral(
                     vec![],
                     BlockStatement {
                         statements: vec![Statement::Return(Some(Expression::IntLiteral(1)))],
@@ -85,7 +166,7 @@ mod tests {
     #[test]
     fn test_if_expression() {
         let (input, expected) = (
-            r"if (x < y) { let x = 1;return x; } else { y }",
+            r"if x < y { let x = 1;return x; } else { y }",
             Expression::If(
                 Box::new(Expression::Binary(
                     BinaryOperator::Lt,
@@ -105,7 +186,7 @@ mod tests {
                 }),
             ),
         );
-        let mut parser = Parser::from(input.to_string());
+        let mut parser = Parser::from(input);
         let program = parser.parse_program();
         println!("{}", program.to_string());
         check_parser_error(parser);
@@ -115,6 +196,11 @@ mod tests {
     #[test]
     fn test_operator_precedence_parsing() {
         let tests = vec![
+            ("a * [1, 2, 3, 4][b * c]", "(a * ([1, 2, 3, 4][(b * c)]))"),
+            (
+                "add(a * b[2], b[1], 2 * [1, 2][1])",
+                "add((a * (b[2])), (b[1]), (2 * ([1, 2][1])))",
+            ),
             ("1 + (2 + 3) + 4", "((1 + (2 + 3)) + 4)"),
             ("(5+5)*2", "((5 + 5) * 2)"),
             ("2/(5+5)", "(2 / (5 + 5))"),
@@ -142,11 +228,10 @@ mod tests {
             ),
         ];
         for (input, expect) in tests {
-            let mut parser = Parser::from(String::from(input));
+            let mut parser = Parser::from(input);
             let program = parser.parse_program();
-            println!("{}", program);
             check_parser_error(parser);
-            assert_eq!(expect, program.to_string());
+            assert_eq!(program.to_string(), expect);
         }
     }
 
@@ -177,7 +262,7 @@ mod tests {
             ("5 != 5;", IntLiteral(5), NotEq, IntLiteral(5)),
         ];
         for (input, left_val, operator, right_val) in infix_tests {
-            let mut parser = Parser::from(input.to_string());
+            let mut parser = Parser::from(input);
             let program = parser.parse_program();
             check_parser_error(parser);
             assert_eq!(
@@ -198,9 +283,7 @@ mod tests {
     let y = 10;
     let z = 838383 ;
         ";
-        let lexer = Lexer::new(String::from(input));
-        let parser = Parser::new(lexer);
-        // println!("sattements: {:#?}", statements);
+        let parser = Parser::from(input);
         test_let_statement(parser)
     }
 
@@ -210,7 +293,7 @@ mod tests {
         return ;
         return 123;
         ";
-        let lexer = Lexer::new(input.to_string());
+        let lexer = Lexer::new(input);
         let mut parser = Parser::new(lexer);
 
         let program = parser.parse_program();
@@ -222,7 +305,7 @@ mod tests {
 
     #[test]
     fn test_identifier_expression() {
-        let input = String::from("1;");
+        let input = "1;";
         let mut parser = Parser::from(input);
         let program = parser.parse_program();
         check_parser_error(parser);
@@ -255,7 +338,7 @@ mod tests {
             ("-15;", UnaryOperator::Neg, IntLiteral(15)),
         ];
         for (input, expected_operator, expected_expr) in prefix_tests {
-            let mut parser = Parser::from(input.to_string());
+            let mut parser = Parser::from(input);
             let program = parser.parse_program();
             check_parser_error(parser);
             assert_eq!(
@@ -270,7 +353,7 @@ mod tests {
 
     /// 辅助函数 测试let
     fn test_let_statement(mut parser: Parser) {
-        let program = parser.parse_program();
+        let _program = parser.parse_program();
         check_parser_error(parser);
     }
 

@@ -1,9 +1,9 @@
-use crate::core::ast::BlockStatement;
+use crate::core::base::ast::BlockStatement;
 use crate::core::{
-    ast::{BinaryOperator, Expression, Program, Statement, UnaryOperator},
+    base::ast::{BinaryOperator, Expression, Program, Statement, UnaryOperator},
+    base::token::Token,
     lexer::Lexer,
-    parser::{BinaryParseFn, Parser, ParserError, Precedence, Result, UnaryParseFn},
-    token::Token,
+    parser::{BinaryParseFn, ParseResult, Parser, ParserError, Precedence, UnaryParseFn},
 };
 
 impl Parser {
@@ -20,7 +20,7 @@ impl Parser {
         parser
     }
     /// 从字符串构建Parser
-    pub fn from(input: String) -> Self {
+    pub fn from(input: &str) -> Self {
         let lexer = Lexer::new(input);
         Parser::new(lexer)
     }
@@ -30,14 +30,9 @@ impl Parser {
         while self.has_next() {
             match self.parse_statement() {
                 Ok(statement) => statements.push(statement),
-                Err(err) => {
-                    self.errors.push(err);
-                    while self.token != Token::Semicolon && self.token != Token::Eof {
-                        self.next_token();
-                    }
-                }
+                Err(err) => self.errors.push(err),
             }
-            self.next_token();
+            self.next_token()
         }
         Program { statements }
     }
@@ -47,52 +42,55 @@ impl Parser {
         self.peek_token = self.lexer.parse_token();
     }
     /// 解析语句
-    fn parse_statement(&mut self) -> Result<Statement> {
-        let result = match self.token {
+    fn parse_statement(&mut self) -> ParseResult<Statement> {
+        match self.token {
             Token::Let => self.parse_let_statement(),
             Token::Return => self.parse_return_statement(),
             _ => self.parse_expression_statement(),
-        };
-        result
+        }
     }
     /// 解析let语句
     ///
     /// let identifier = expression;
-    fn parse_let_statement(&mut self) -> Result<Statement> {
+    fn parse_let_statement(&mut self) -> ParseResult<Statement> {
         // cur_token is let
         //ident
         let name = match &self.peek_token {
             Token::Ident(ident) => ident.clone(),
             token => return Err(ParserError::ExpectedIdentifier(token.clone())),
         };
-        //eat ident
+        //eat let
         self.next_token();
-        //=
+        // expect '=' then eat ident
         self.expect_peek(Token::Assign, ParserError::ExpectedAssign)?;
         //expr
         self.next_token(); //eat =
         let expression = self.parse_expression(Precedence::Lowest)?;
-        self.next_token(); //eat ;
+        if self.peek_token == Token::Semicolon {
+            self.next_token(); //eat ;
+        }
         Ok(Statement::Let(name, expression))
     }
     /// 解析return语句
     ///
     /// 1. return;
     /// 2. return expr;
-    fn parse_return_statement(&mut self) -> Result<Statement> {
+    fn parse_return_statement(&mut self) -> ParseResult<Statement> {
         self.next_token(); //eat return
         let mut option = None;
         if self.token != Token::Semicolon {
             let expression = self.parse_expression(Precedence::Lowest)?;
             option = Some(expression);
         }
-        self.next_token(); //eat ;
+        if self.peek_token == Token::Semicolon {
+            self.next_token(); //eat ;
+        }
         Ok(Statement::Return(option))
     }
     /// 解析表达式语句
     ///
     /// expr;
-    fn parse_expression_statement(&mut self) -> Result<Statement> {
+    fn parse_expression_statement(&mut self) -> ParseResult<Statement> {
         let expression = self.parse_expression(Precedence::Lowest);
         if self.peek_token == Token::Semicolon {
             self.next_token();
@@ -102,13 +100,13 @@ impl Parser {
     /// 解析语句块
     ///
     /// {
-    ///   statement
-    ///   statement
+    ///   statement;
+    ///   statement;
     /// }
-    fn parse_block_statement(&mut self) -> Result<BlockStatement> {
+    fn parse_block_statement(&mut self) -> ParseResult<BlockStatement> {
         self.next_token(); // eat {
         let mut statements = vec![];
-        while self.token != Token::Rbrace {
+        while self.token != Token::Rbrace && self.token != Token::Eof {
             let statement = self.parse_statement()?;
             statements.push(statement);
             self.next_token();
@@ -116,7 +114,7 @@ impl Parser {
         Ok(BlockStatement { statements })
     }
     /// 解析表达式
-    fn parse_expression(&mut self, precedence: Precedence) -> Result<Expression> {
+    fn parse_expression(&mut self, precedence: Precedence) -> ParseResult {
         let unary = self
             .unary_parse_fn()
             .ok_or_else(|| ParserError::ExpectedUnaryOp(self.token.clone()))?;
@@ -134,14 +132,35 @@ impl Parser {
         Ok(left_expr)
     }
     ///解析分组表达式
-    fn parse_grouped_expression(&mut self) -> Result<Expression> {
+    fn parse_grouped_expression(&mut self) -> ParseResult {
         self.next_token(); // eat (
         let expr = self.parse_expression(Precedence::Lowest)?;
         self.expect_peek(Token::Rparen, |tk| ParserError::Expected(Token::Rparen, tk))?;
         Ok(expr)
     }
+    /// ## 解析数组字面量
+    fn parse_array_literal(&mut self) -> ParseResult {
+        let args = self.parse_comma_arguments(Token::Rbracket)?;
+        Ok(Expression::ArrayLiteral(args))
+    }
+    /// ## 解析映射表字面量
+    fn parse_hash_literal(&mut self) -> ParseResult {
+        let mut v = vec![];
+        self.next_token(); // eat {
+        while self.token != Token::Rbrace {
+            if self.token != Token::Comma {
+                let key = self.parse_expression(Precedence::Lowest)?;
+                self.expect_peek_is(Token::Colon)?; // cu token is :
+                self.next_token(); // eat :
+                let val = self.parse_expression(Precedence::Lowest)?;
+                v.push((key, val));
+            }
+            self.next_token();
+        }
+        Ok(Expression::HashLiteral(v))
+    }
     /// 解析函数声明参数列表
-    fn parse_function_parameters(&mut self) -> Result<Vec<String>> {
+    fn parse_function_parameters(&mut self) -> ParseResult<Vec<String>> {
         self.next_token(); // eat (
         let mut params = vec![];
         while self.token != Token::Rparen {
@@ -154,15 +173,21 @@ impl Parser {
         Ok(params)
     }
     /// 解析函数调用表达式
-    fn parse_call_expression(&mut self, function: Expression) -> Result<Expression> {
-        let arguments = self.parse_call_arguments()?;
+    fn parse_call_expression(&mut self, function: Expression) -> ParseResult {
+        let arguments = self.parse_comma_arguments(Token::Rparen)?;
         Ok(Expression::Call(Box::new(function), arguments))
     }
+    fn parse_index_expression(&mut self, left: Expression) -> ParseResult {
+        self.next_token();
+        let index = self.parse_expression(Precedence::Lowest)?;
+        self.next_token();
+        Ok(Expression::Index(Box::new(left), Box::new(index)))
+    }
     /// 解析函数调用参数列表
-    fn parse_call_arguments(&mut self) -> Result<Vec<Expression>> {
-        self.next_token(); // eat (
+    fn parse_comma_arguments(&mut self, end_token: Token) -> ParseResult<Vec<Expression>> {
+        self.next_token(); // eat start_token
         let mut arguments = vec![];
-        while self.token != Token::Rparen {
+        while self.token != end_token {
             if self.token != Token::Comma {
                 let expr = self.parse_expression(Precedence::Lowest)?;
                 arguments.push(expr);
@@ -172,21 +197,25 @@ impl Parser {
         Ok(arguments)
     }
     /// 解析函数表达式
-    fn parse_function_expression(&mut self) -> Result<Expression> {
+    fn parse_function_expression(&mut self) -> ParseResult {
         self.expect_peek_is(Token::Lparen)?; // eat fun
         let params = self.parse_function_parameters()?;
         self.expect_peek_is(Token::Lbrace)?; // eat )
         let blocks = self.parse_block_statement()?;
-        self.next_token(); // eat }
-        Ok(Expression::Fun(params, blocks))
+        Ok(Expression::FunctionLiteral(params, blocks))
     }
     ///解析if表达式
-    fn parse_if_expression(&mut self) -> Result<Expression> {
-        self.expect_peek_is(Token::Lparen)?; // eat if
-        self.next_token(); // eat (
+    fn parse_if_expression(&mut self) -> ParseResult {
+        let has_bracket = self.peek_token == Token::Lparen;
+        if has_bracket {
+            self.next_token();
+        }
+        self.next_token();
         let condition = self.parse_expression(Precedence::Lowest)?;
-        self.next_token(); // eat last
-        self.expect_peek_is(Token::Lbrace)?; // eat )
+        if has_bracket {
+            self.expect_peek_is(Token::Rparen)?;
+        }
+        self.expect_peek_is(Token::Lbrace)?;
         let consequence = self.parse_block_statement()?;
         self.next_token(); // eat }
 
@@ -205,7 +234,7 @@ impl Parser {
     }
     /*一元表达式相关*/
     /// 解析一元表达式
-    fn parse_unary_expression(&mut self) -> Result<Expression> {
+    fn parse_unary_expression(&mut self) -> ParseResult {
         let operator = self.unary_token(&self.token)?;
         self.next_token();
         let expr = self.parse_expression(Precedence::Prefix)?;
@@ -215,21 +244,28 @@ impl Parser {
     fn unary_parse_fn(&self) -> Option<UnaryParseFn> {
         match self.token {
             Token::Ident(_) => Some(Parser::parse_identifier),
+
             Token::Int(_) => Some(Parser::parse_integer_literal),
             Token::Float(_) => Some(Parser::parse_float_literal),
             Token::True => Some(Parser::parse_boolean),
             Token::False => Some(Parser::parse_boolean),
             Token::String(_) => Some(Parser::parse_string_literal),
+
             Token::Bang => Some(Parser::parse_unary_expression),
             Token::Minus => Some(Parser::parse_unary_expression),
+
             Token::Lparen => Some(Parser::parse_grouped_expression),
+            Token::Lbracket => Some(Parser::parse_array_literal),
+            Token::Lbrace => Some(Parser::parse_hash_literal),
+
             Token::If => Some(Parser::parse_if_expression),
             Token::Function => Some(Parser::parse_function_expression),
+
             _ => None,
         }
     }
     /// 一元表达式操作符
-    fn unary_token(&self, token: &Token) -> Result<UnaryOperator> {
+    fn unary_token(&self, token: &Token) -> ParseResult<UnaryOperator> {
         match token {
             Token::Bang => Ok(UnaryOperator::Not),
             Token::Minus => Ok(UnaryOperator::Neg),
@@ -239,7 +275,7 @@ impl Parser {
 
     /*二元表达式相关*/
     /// 解析二元表达式
-    fn parse_binary_expression(&mut self, left: Expression) -> Result<Expression> {
+    fn parse_binary_expression(&mut self, left: Expression) -> ParseResult {
         let (precedence, operator) = self.binary_token(&self.token);
         let operator = operator.ok_or_else(|| ParserError::ExpectedBinaryOp(self.token.clone()))?;
         self.next_token(); //eat op
@@ -260,6 +296,7 @@ impl Parser {
             | Token::Lt
             | Token::Gt => Some(Parser::parse_binary_expression),
             Token::Lparen => Some(Parser::parse_call_expression),
+            Token::Lbracket => Some(Parser::parse_index_expression),
             _ => None,
         }
     }
@@ -278,25 +315,27 @@ impl Parser {
             Token::Slash => (Precedence::Product, Some(BinaryOperator::Div)),
             Token::Asterisk => (Precedence::Product, Some(BinaryOperator::Mul)),
             Token::Lparen => (Precedence::Call, None),
+            Token::Lbracket => (Precedence::Index, None),
             _ => (Precedence::Lowest, None),
         }
     }
 
     /*基本解析*/
     /// 解析标识符
-    fn parse_identifier(&mut self) -> Result<Expression> {
+    fn parse_identifier(&mut self) -> ParseResult {
         self.parse_identifier_string().map(Expression::Identifier)
     }
-    /// 解析标识符
-    fn parse_identifier_string(&mut self) -> Result<String> {
+    /// 解析标识符字符串
+    fn parse_identifier_string(&mut self) -> ParseResult<String> {
         if let Token::Ident(id) = &self.token {
             Ok(id.to_string())
         } else {
             Err(ParserError::ExpectedIdentifier(self.token.clone()))
         }
     }
+    /*数据类型解析*/
     /// 解析整型字面量
-    fn parse_integer_literal(&mut self) -> Result<Expression> {
+    fn parse_integer_literal(&mut self) -> ParseResult {
         if let Token::Int(int) = &self.token {
             match int.parse() {
                 Ok(val) => Ok(Expression::IntLiteral(val)),
@@ -307,7 +346,7 @@ impl Parser {
         }
     }
     /// 解析浮点数字面量
-    fn parse_float_literal(&mut self) -> Result<Expression> {
+    fn parse_float_literal(&mut self) -> ParseResult {
         if let Token::Float(float) = &self.token {
             match float.parse() {
                 Ok(val) => Ok(Expression::FloatLiteral(val)),
@@ -318,7 +357,7 @@ impl Parser {
         }
     }
     /// 解析字符串字面量
-    fn parse_string_literal(&mut self) -> Result<Expression> {
+    fn parse_string_literal(&mut self) -> ParseResult {
         if let Token::String(s) = &self.token {
             Ok(Expression::StringLiteral(s.to_string()))
         } else {
@@ -326,7 +365,7 @@ impl Parser {
         }
     }
     ///解析布尔值
-    fn parse_boolean(&mut self) -> Result<Expression> {
+    fn parse_boolean(&mut self) -> ParseResult {
         match &self.token {
             Token::True => Ok(Expression::BoolLiteral(true)),
             Token::False => Ok(Expression::BoolLiteral(false)),
@@ -335,7 +374,7 @@ impl Parser {
     }
     /*其他*/
     /// 断言Token是否为期待值
-    fn expect_peek(&mut self, expected: Token, error: fn(Token) -> ParserError) -> Result<()> {
+    fn expect_peek(&mut self, expected: Token, error: fn(Token) -> ParserError) -> ParseResult<()> {
         if self.peek_token == expected {
             self.next_token();
             Ok(())
@@ -343,7 +382,7 @@ impl Parser {
             Err(error(self.peek_token.clone()))
         }
     }
-    fn expect_peek_is(&mut self, expected: Token) -> Result<()> {
+    fn expect_peek_is(&mut self, expected: Token) -> ParseResult<()> {
         if self.peek_token == expected {
             self.next_token();
             Ok(())

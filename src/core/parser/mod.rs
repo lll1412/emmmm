@@ -1,11 +1,14 @@
 mod r#impl;
 mod test;
 
-use crate::core::{ast::Expression, lexer::Lexer, token::Token};
+use crate::core::{
+    base::{ast::Expression, token::Token},
+    lexer::Lexer,
+};
 
-type Result<T> = std::result::Result<T, ParserError>;
-type UnaryParseFn = fn(&mut Parser) -> Result<Expression>;
-type BinaryParseFn = fn(&mut Parser, Expression) -> Result<Expression>;
+type ParseResult<T = Expression> = std::result::Result<T, ParserError>;
+type UnaryParseFn = fn(&mut Parser) -> ParseResult<Expression>;
+type BinaryParseFn = fn(&mut Parser, Expression) -> ParseResult<Expression>;
 
 #[derive(Debug)]
 pub struct Parser {
@@ -33,6 +36,8 @@ enum Precedence {
     Prefix,
     /// my_fun
     Call,
+
+    Index,
 }
 /// 解析错误类
 #[derive(Debug)]
@@ -52,5 +57,5 @@ pub enum ParserError {
     ExpectedBoolean(Token),
 
     ParseInt(String),
-    ParseFloat(String),
+    // ParseFloat(String),
 }

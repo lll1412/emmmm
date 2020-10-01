@@ -1,14 +1,14 @@
-use crate::core::lexer::Lexer;
-use crate::core::token::*;
+use crate::core::base::token::*;
+use crate::core::lexer::{is_digit, is_letter, Lexer};
 use std::iter::Peekable;
 use std::str::Chars;
 
 impl Lexer {
-    pub fn new(input: String) -> Self {
-        let chars: Peekable<Chars> = unsafe { std::mem::transmute(input.chars().peekable()) };
-        let input = input.to_string();
+    pub fn new(input: &str) -> Self {
+        let chars: Peekable<Chars<'static>> =
+            unsafe { std::mem::transmute(input.chars().peekable()) };
         let mut lexer = Self {
-            input,
+            input: String::from(input),
             position: 0,
             ch: EOF,
             chars,
@@ -19,7 +19,6 @@ impl Lexer {
     /// 读取Token
     pub fn parse_token(&mut self) -> Token {
         self.skip_whitespace();
-        // println!("peek: {:?}", self.peek_char());
         let token = match self.ch {
             '(' => Token::Lparen,
             ')' => Token::Rparen,
@@ -36,54 +35,32 @@ impl Lexer {
             '-' => Token::Minus,
             '*' => Token::Asterisk,
             '/' => Token::Slash,
-            '>' => {
-                if self.peek_char() == &'=' {
-                    Token::Ge
-                } else {
-                    Token::Gt
-                }
-            }
-            '<' => {
-                if self.peek_char() == &'=' {
-                    Token::Le
-                } else {
-                    Token::Lt
-                }
-            }
-            '!' => {
-                if self.peek_char() == &'=' {
-                    self.read_char();
-                    Token::NotEq
-                } else {
-                    Token::Bang
-                }
-            }
-            '=' => {
-                if self.peek_char().eq(&'=') {
-                    self.read_char();
-                    Token::Eq
-                } else {
-                    Token::Assign
-                }
+            '>' => self.peek_is_or('=', Token::Ge, Token::Gt),
+            '<' => self.peek_is_or('=', Token::Le, Token::Lt),
+            '!' => self.peek_is_eat_or('=', Token::NotEq, Token::Bang),
+            '=' => self.peek_is_eat_or('=', Token::Eq, Token::Assign),
+            '"' | '`' => {
+                //may be string
+                let string = self.read_string();
+                Token::String(string)
             }
             EOF => Token::Eof,
             c => {
                 return if is_letter(c) {
+                    //标识符
                     let id = self.read_identifier();
                     Token::lookup_id(id)
                 } else if is_digit(c) {
+                    //数字
                     let num = self.read_number();
                     if num.contains('.') {
                         Token::Float(num.to_string())
                     } else {
                         Token::Int(num.to_string())
                     }
-                } else if c == '"' || c == '`' {
-                    //may be string
-                    let string = self.read_string();
-                    Token::String(string.to_string())
                 } else {
-                    Token::Illegal(c)
+                    //非法字符
+                    return Token::Illegal;
                 };
             }
         };
@@ -111,16 +88,47 @@ impl Lexer {
         &self.input[position..self.position]
     }
     //读取字符串
-    fn read_string(&mut self) -> &str {
+    fn read_string(&mut self) -> String {
         let around_ch = self.ch;
-        self.read_char(); // start " or `
-        let position_start = self.position;
-        while self.ch != around_ch {
+        self.read_char(); // start with " or `
+        let mut last_char = EOF;
+        let mut result = String::new();
+        loop {
+            if last_char == '\\' {
+                //escape
+                let escaped_str = self.escape_char(self.ch);
+                if escaped_str != EOF {
+                    result.push(escaped_str);
+                    if escaped_str == '\\' {
+                        last_char = '\u{0}';
+                        continue;
+                    }
+                }
+            } else if self.ch == '\\' {
+            } else {
+                if self.ch == around_ch {
+                    break;
+                }
+                result.push(self.ch);
+            }
+            last_char = self.ch;
             self.read_char();
         }
-        let position_end = self.position;
-        self.read_char(); // end " or `
-        &self.input[position_start..position_end]
+        result
+    }
+    //
+    fn escape_char(&mut self, c: char) -> char {
+        match c {
+            't' => '\t',
+            'n' => '\n',
+            '"' => '\"',
+            '`' => '`',
+            '\\' => {
+                self.read_char();
+                '\\'
+            }
+            _ => EOF,
+        }
     }
     //忽略空格
     fn skip_whitespace(&mut self) {
@@ -140,5 +148,22 @@ impl Lexer {
     //查看字符
     fn peek_char(&mut self) -> &char {
         self.chars.peek().unwrap_or(&EOF)
+    }
+    //预检下个字符是否为期待字符，是则返回期待Token，并向后读取一个字符，否则返回默认Token
+    fn peek_is_eat_or(&mut self, c: char, expect_token: Token, default_token: Token) -> Token {
+        if self.peek_char().eq(&c) {
+            self.read_char();
+            expect_token
+        } else {
+            default_token
+        }
+    }
+    //预检下个字符是否为期待字符，是则返回期待Token，否则返回默认Token
+    fn peek_is_or(&mut self, c: char, expect_token: Token, else_token: Token) -> Token {
+        if self.peek_char().eq(&c) {
+            expect_token
+        } else {
+            else_token
+        }
     }
 }

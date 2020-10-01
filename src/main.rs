@@ -1,4 +1,4 @@
-use example::repl;
+use alian::repl;
 
 fn main() {
     println!("Welcome to the 👽 programming language!\n");

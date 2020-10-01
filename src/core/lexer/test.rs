@@ -1,16 +1,30 @@
 #[cfg(test)]
 mod tests {
+    use crate::core::base::token::Token;
     use crate::core::lexer::Lexer;
-    use crate::core::token::Token;
     use Token::Plus;
-
+    #[test]
+    fn print_token() {
+        let input = r#"
+        let add = fn(x, y) {
+                    a + b;
+                  };
+        add(2,4);
+            "#;
+        let mut lexer = Lexer::new(input);
+        let mut token = lexer.parse_token();
+        while token != Token::Eof {
+            print!("{:?} ", token);
+            token = lexer.parse_token();
+        }
+    }
     #[test]
     fn test_next_token() {
         let input = r#"
-    let s = "hello";
+    let s = "hello \n \"world\"";
     let five = 5.1;
     let ten = 10;
-    let add = fun(x, y) {
+    let add = fn(x, y) {
         return x + y;
     };
     let result = add(five, ten);
@@ -21,15 +35,15 @@ mod tests {
     } else {
         return false;
     }
-"#
-        .to_string();
+    [1,2]
+"#;
         // let input = input.split("").collect();
 
         let tests = [
             Token::Let,
             Token::Ident("s".to_string()),
             Token::Assign,
-            Token::String("hello".to_string()),
+            Token::String("hello \n \"world\"".to_string()),
             Token::Semicolon,
             Token::Let,
             Token::Ident("five".to_string()),
@@ -95,14 +109,11 @@ mod tests {
             Token::False,
             Token::Semicolon,
             Token::Rbrace,
-            // Token::Int("10".to_string()),
-            // Token::Eq,
-            // Token::Int("10".to_string()),
-            // Token::Semicolon,
-            // Token::Int("10".to_string()),
-            // Token::NotEq,
-            // Token::Int("9".to_string()),
-            // Token::Semicolon,
+            Token::Lbracket,
+            Token::Int("1".to_string()),
+            Token::Comma,
+            Token::Int("2".to_string()),
+            Token::Rbracket,
             Token::Eof,
         ];
 
@@ -120,8 +131,7 @@ mod tests {
         5 + 5;
             5 + 5;
             5*5;
-        "
-        .to_string();
+        ";
         let mut lexer = Lexer::new(input);
         let tests = [
             Token::Int("5".to_string()),

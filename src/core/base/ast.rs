@@ -7,10 +7,19 @@ pub struct Program {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Statement {
+    // let ident = expr
     Let(String, Expression),
+    // for (initial; condition; last) { blockStatement }
+    // For(
+    //     Option<Expression>,
+    //     Option<Expression>,
+    //     Option<Expression>,
+    //     BlockStatement,
+    // ),
+    // return
     Return(Option<Expression>),
+    //
     Expression(Expression),
-    // Block(Vec<Statement>),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -20,7 +29,7 @@ pub struct BlockStatement {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Expression {
-    /// 标识符
+    // 标识符
     Identifier(String),
     // 整数字面量
     IntLiteral(i64),
@@ -30,18 +39,25 @@ pub enum Expression {
     StringLiteral(String),
     // 布尔值字面量
     BoolLiteral(bool),
+    // 函数字面量
+    FunctionLiteral(Vec<String>, BlockStatement),
+    // 数组字面量
+    ArrayLiteral(Vec<Expression>),
+    // 索引表达式
+    Index(Box<Expression>, Box<Expression>),
+    // 映射表
+    HashLiteral(Vec<(Expression, Expression)>),
+
     // 一元表达式
     Unary(UnaryOperator, Box<Expression>),
     // 二元表达式
     Binary(BinaryOperator, Box<Expression>, Box<Expression>),
 
-    // Condition(Box<Expression>),
     // if表达式
     If(Box<Expression>, BlockStatement, Option<BlockStatement>),
-    // 函数表达式
-    Fun(Vec<String>, BlockStatement),
-    // 函数调用表达式
+    // 函数调用表达式, (函数, 参数)
     Call(Box<Expression>, Vec<Expression>),
+    //
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -78,9 +94,9 @@ impl Display for Program {
 
 impl Display for BlockStatement {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        writeln!(f, "{{")?;
+        write!(f, "{{")?;
         for statement in &self.statements {
-            writeln!(f, "\t{}", statement)?;
+            write!(f, " {} ", statement)?;
         }
         write!(f, "}}")
     }
@@ -89,12 +105,15 @@ impl Display for BlockStatement {
 impl Display for Statement {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match &self {
-            Statement::Let(name, val) => write!(f, "let {} = {};", name, val),
+            Statement::Let(name, val) => write!(f, "let {} = {}; ", name, val),
             Statement::Return(opt) => {
-                let expression = opt.clone().unwrap_or(Expression::Identifier(String::new()));
-                write!(f, "return {};", expression)
+                let expression = opt
+                    .clone()
+                    .unwrap_or_else(|| Expression::Identifier(String::new()));
+                write!(f, "return {}; ", expression)
             }
             Statement::Expression(exp) => write!(f, "{}", exp),
+            // Statement::For(_, _, _, _) => write!(f, ""),
         }
     }
 }
@@ -116,15 +135,41 @@ impl Display for Expression {
                 }
                 Ok(())
             }
-            Expression::Fun(params, blocks) => write!(
+            Expression::FunctionLiteral(params, blocks) => write!(
                 f,
-                "fun({params}) {blocks}",
+                "fn({params}) {blocks}",
                 params = params.join(", "),
                 blocks = blocks
             ),
             Expression::Call(fun, exprs) => {
-                let exprs: Vec<String> = exprs.into_iter().map(|exp| exp.to_string()).collect();
-                write!(f, "{fun}({exprs})", fun = fun, exprs = exprs.join(","))
+                let exprs: String = exprs
+                    .iter()
+                    .map(|exp| exp.to_string())
+                    .collect::<Vec<String>>()
+                    .join(", ");
+                write!(f, "{fun}({exprs})", fun = fun, exprs = exprs)
+            }
+            Expression::ArrayLiteral(elements) => {
+                let exprs: String = elements
+                    .iter()
+                    .map(|ex| ex.to_string())
+                    .collect::<Vec<String>>()
+                    .join(", ");
+                write!(f, "[{elements}]", elements = exprs)
+            }
+            Expression::Index(left_expr, index_expr) => write!(
+                f,
+                "({left}[{index}])",
+                left = left_expr.to_string(),
+                index = index_expr.to_string()
+            ),
+            Expression::HashLiteral(hash) => {
+                let r = hash
+                    .iter()
+                    .map(|(k, v)| format!("{}:{}", k, v))
+                    .collect::<Vec<String>>()
+                    .join(", ");
+                write!(f, "{{{}}}", r)
             }
         }
     }
