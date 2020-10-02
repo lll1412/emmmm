@@ -1,10 +1,10 @@
 use crate::core::base::ast::{
     BinaryOperator, BlockStatement, Expression, Program, Statement, UnaryOperator,
 };
-use crate::core::eval::builtins::lookup;
-use crate::core::eval::environment::Environment;
-use crate::core::eval::object::Object::Boolean;
-use crate::core::eval::object::{EvalError, HashKey, Object};
+use crate::eval::builtins::lookup;
+use crate::eval::environment::Environment;
+use crate::eval::object::Object::Boolean;
+use crate::eval::object::{EvalError, HashKey, Object};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ops::Deref;

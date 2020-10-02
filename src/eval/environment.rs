@@ -1,4 +1,4 @@
-use crate::core::eval::object::Object;
+use crate::eval::object::Object;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;

@@ -1,5 +1,5 @@
-use crate::core::eval::evaluator::EvalResult;
-use crate::core::eval::object::{EvalError, Object};
+use crate::eval::evaluator::EvalResult;
+use crate::eval::object::{EvalError, Object};
 use std::cell::RefCell;
 macro_rules! builtin {
     ($name:ident) => {

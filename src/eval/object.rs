@@ -1,6 +1,6 @@
 use crate::core::base::ast::{BinaryOperator, BlockStatement, Expression, UnaryOperator};
-use crate::core::eval::environment::Environment;
-use crate::core::eval::evaluator::EvalResult;
+use crate::eval::environment::Environment;
+use crate::eval::evaluator::EvalResult;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter, Result};

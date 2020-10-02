@@ -3,10 +3,8 @@ use std::io;
 use std::io::Write;
 use std::rc::Rc;
 
-use eval::{environment, evaluator};
-
-use crate::core::eval;
 use crate::core::parser::Parser;
+use crate::eval::{environment, evaluator};
 
 const PROMPT: &str = ">> ";
 

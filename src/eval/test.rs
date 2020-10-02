@@ -3,11 +3,11 @@ mod tests {
     use crate::core::base::ast::{
         BinaryOperator, BlockStatement, Expression, Statement, UnaryOperator,
     };
-    use crate::core::eval::environment::Environment;
-    use crate::core::eval::evaluator;
-    use crate::core::eval::evaluator::{Env, EvalResult};
-    use crate::core::eval::object::{EvalError, HashKey, Object};
     use crate::core::parser::Parser;
+    use crate::eval::environment::Environment;
+    use crate::eval::evaluator;
+    use crate::eval::evaluator::{Env, EvalResult};
+    use crate::eval::object::{EvalError, HashKey, Object};
     use std::cell::RefCell;
     use std::collections::HashMap;
     use std::fmt::{Debug, Display};

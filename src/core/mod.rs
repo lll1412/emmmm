@@ -1,4 +1,3 @@
-mod base;
-pub mod eval;
+pub mod base;
 mod lexer;
 pub mod parser;
