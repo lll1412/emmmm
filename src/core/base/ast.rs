@@ -1,8 +1,15 @@
+use crate::core::parser::Parser;
 use std::fmt::{Display, Formatter, Result};
 
 #[derive(Debug)]
 pub struct Program {
     pub statements: Vec<Statement>,
+}
+
+impl Program {
+    pub fn new(input: &str) -> Self {
+        Parser::from(input).parse_program()
+    }
 }
 
 #[derive(Debug, PartialEq, Clone)]

@@ -3,8 +3,15 @@ use std::io;
 use std::io::Write;
 use std::rc::Rc;
 
+use vm::Vm;
+
+use crate::compiler::Compiler;
+use crate::core::base::ast::Program;
 use crate::core::parser::Parser;
-use crate::eval::{environment, evaluator};
+use crate::eval::evaluator;
+use crate::eval::evaluator::Env;
+use crate::object::environment;
+use crate::vm;
 
 const PROMPT: &str = ">> ";
 
@@ -36,11 +43,32 @@ pub fn start() {
                 println!("\t{:?}", err);
             }
         } else {
-            let result = evaluator::eval(&program, Rc::clone(&env));
+            // exe_with_eval(&program, &env);
+            exe_with_vm(program, &env);
+        }
+    }
+}
+
+fn _exe_with_eval(program: &Program, env: &Env) {
+    let result = evaluator::eval(&program, Rc::clone(env));
+    match result {
+        Ok(object) => println!("{}", object),
+        Err(err) => eprintln!("{}", err),
+    }
+}
+
+fn exe_with_vm(program: Program, _env: &Env) {
+    let mut compiler = Compiler::new();
+    let result = compiler.compile(program);
+    match result {
+        Ok(byte_code) => {
+            let mut vm = Vm::new(byte_code);
+            let result = vm.run();
             match result {
                 Ok(object) => println!("{}", object),
-                Err(err) => eprintln!("{}", err),
+                Err(vm_err) => eprintln!("{:?}", vm_err),
             }
         }
+        Err(com_err) => eprintln!("{:?}", com_err),
     }
 }

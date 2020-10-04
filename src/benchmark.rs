@@ -3,7 +3,8 @@ use std::rc::Rc;
 use std::time::Instant;
 
 use crate::core::parser::Parser;
-use crate::eval::{environment, evaluator};
+use crate::eval::evaluator;
+use crate::object::environment;
 
 pub fn benchmark() {
     let n = 30;
