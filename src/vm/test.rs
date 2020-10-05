@@ -5,8 +5,17 @@ mod tests {
     use crate::object::Object;
     use crate::vm::Vm;
     #[test]
+    fn test_let_statement() {
+        let tests = vec![
+            ("let a= 1;a", Object::Integer(1)),
+            ("let a= 1;let b = 2;a+b", Object::Integer(3)),
+            ("let a= 1;let b = a + a;a+b", Object::Integer(3)),
+        ];
+        run_vm_test(tests);
+    }
+    #[test]
     fn test_bang_expression() {
-        let tests = vec![("!(if false { 1 };)", Object::Null)];
+        let tests = vec![("! if false { 1 };", Object::Null)];
         run_vm_test(tests);
     }
     #[test]
@@ -79,10 +88,10 @@ mod tests {
                         Ok(object) => {
                             test_expected_object(input, &object, &expected);
                         }
-                        Err(e) => panic!("Vm Error: {:?}", e),
+                        Err(e) => panic!("Input: {}\nVm Error: {:?}", input, e),
                     };
                 }
-                Err(e) => panic!("Compiler Error: {:?}", e),
+                Err(e) => panic!("Input: {}\nCompiler Error: {:?}", input, e),
             }
         }
     }

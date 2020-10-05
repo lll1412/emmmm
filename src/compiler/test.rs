@@ -1,9 +1,95 @@
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use crate::compiler::code::{self, make, print_instructions, Opcode};
+    use crate::compiler::symbol_table::{Symbol, SymbolTable, GLOBAL_SCOPE};
     use crate::compiler::{Compiler, Instructions};
     use crate::core::base::ast::Program;
     use crate::object::Object;
+
+    #[test]
+    fn test_define() {
+        let expected = {
+            let mut map = HashMap::new();
+            map.insert(
+                "a",
+                Symbol {
+                    name: "a".to_string(),
+                    scope: GLOBAL_SCOPE,
+                    index: 0,
+                },
+            );
+            map.insert(
+                "b",
+                Symbol {
+                    name: "b".to_string(),
+                    scope: GLOBAL_SCOPE,
+                    index: 1,
+                },
+            );
+            map
+        };
+        let mut global = SymbolTable::default();
+        let a = global.define("a");
+        assert_eq!(a, expected["a"]);
+        let b = global.define("b");
+        assert_eq!(b, expected["b"]);
+    }
+
+    #[test]
+    fn test_resolve() {
+        let mut global = SymbolTable::default();
+        let _a = global.define("a");
+        let _b = global.define("b");
+        let expected = {
+            let mut map = HashMap::new();
+            map.insert(
+                "a",
+                Symbol {
+                    name: "a".to_string(),
+                    scope: GLOBAL_SCOPE,
+                    index: 0,
+                },
+            );
+            map.insert(
+                "b",
+                Symbol {
+                    name: "b".to_string(),
+                    scope: GLOBAL_SCOPE,
+                    index: 1,
+                },
+            );
+            map
+        };
+        for (k, v) in &expected {
+            let x = global
+                .resolve(k)
+                .expect(&format!("name {} not resolvable", k));
+            assert_eq!(x, v.clone());
+        }
+    }
+
+    #[test]
+    fn test_global_statement() {
+        let tests = vec![(
+            r"
+            let a = 1;
+            let b = 2;
+            a
+            ",
+            vec![Object::Integer(1), Object::Integer(2)],
+            vec![
+                make(Opcode::Constant, vec![0]),
+                make(Opcode::SetGlobal, vec![0]),
+                make(Opcode::Constant, vec![1]),
+                make(Opcode::SetGlobal, vec![1]),
+                make(Opcode::GetGlobal, vec![0]),
+                make(Opcode::Pop, vec![]),
+            ],
+        )];
+        run_compile_test(tests);
+    }
 
     #[test]
     fn test_condition_expression() {
@@ -154,7 +240,7 @@ mod tests {
         for (op_code, operands, bytes_read) in tests {
             let def = op_code.definition();
             let insts = code::make(op_code, operands.clone());
-            let (operand_reads, n) = code::read_operands(def, &insts, 1);
+            let (operand_reads, n) = code::read_operands(def, &insts[1..]);
             if n != bytes_read {
                 panic!("n wrong. want: {}, got: {}", bytes_read, n);
             }
@@ -223,11 +309,13 @@ mod tests {
             let mut compiler = Compiler::new();
             match compiler.compile(program) {
                 Ok(byte_code) => {
-                    assert_eq!(
-                        byte_code.constants, expected_constants,
-                        "bytecode: {:?}",
-                        byte_code
-                    );
+                    let object = byte_code
+                        .constants
+                        .borrow()
+                        .iter()
+                        .map(|c| c.to_object())
+                        .collect::<Vec<Object>>();
+                    assert_eq!(object, expected_constants, "bytecode: {:?}", byte_code);
                     assert_eq!(
                         print_instructions(byte_code.instructions.clone()),
                         print_instructions(expected_instructions.concat()),

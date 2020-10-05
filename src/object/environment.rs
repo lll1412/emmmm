@@ -25,7 +25,7 @@ impl Environment {
     }
     pub fn get(&self, key: &str) -> Option<Val> {
         match self.store.get(key) {
-            Some(v) => Some(Rc::clone(v)),
+            Some(v) => Some(v.clone()),
             None => self
                 .outer
                 .as_ref()

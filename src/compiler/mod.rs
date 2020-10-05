@@ -1,19 +1,25 @@
-use crate::compiler::code::{Instructions, Opcode};
+use std::cell::RefCell;
+use std::rc::Rc;
+
+use crate::compiler::code::{Constant, Instructions, Opcode};
+use crate::compiler::symbol_table::{Symbol, SymbolTable};
 use crate::core::base::ast::{
     BinaryOperator, BlockStatement, Expression, Program, Statement, UnaryOperator,
 };
-use crate::object::Object;
-use crate::vm::NULL;
 
 pub mod code;
+pub mod symbol_table;
 mod test;
 
 type CompileResult<T = ()> = std::result::Result<T, CompileError>;
+pub type Constants = Rc<RefCell<Vec<Constant>>>;
+pub type RcSymbolTable = Rc<RefCell<SymbolTable>>;
 
 #[derive(Debug)]
 pub struct Compiler {
     instructions: Instructions,
-    constants: Vec<Object>,
+    constants: Constants,
+    symbol_table: RcSymbolTable,
     last_instruction: EmittedInstruction,
     previous_instruction: EmittedInstruction,
 }
@@ -37,7 +43,17 @@ impl Compiler {
     pub fn new() -> Self {
         Self {
             instructions: vec![],
-            constants: vec![],
+            constants: Rc::new(RefCell::new(vec![])),
+            symbol_table: Rc::new(RefCell::new(SymbolTable::default())),
+            last_instruction: EmittedInstruction::default(),
+            previous_instruction: EmittedInstruction::default(),
+        }
+    }
+    pub fn with_state(symbol_table: RcSymbolTable, constants: Constants) -> Self {
+        Self {
+            instructions: vec![],
+            constants,
+            symbol_table,
             last_instruction: EmittedInstruction::default(),
             previous_instruction: EmittedInstruction::default(),
         }
@@ -56,11 +72,17 @@ impl Compiler {
     /// 编译语句
     fn compile_statement(&mut self, statement: &Statement) -> CompileResult {
         match statement {
-            Statement::Let(_, _) => {}
+            Statement::Let(id, expr) => {
+                self.compile_expression(expr)?;
+                let symbol = self.symbol_table.borrow_mut().define(id);
+                self.emit(Opcode::SetGlobal, vec![symbol.index]);
+            }
             Statement::Return(_) => {}
-            Statement::Expression(expr) => self.compile_expression(expr)?,
+            Statement::Expression(expr) => {
+                self.compile_expression(expr)?;
+                self.emit(Opcode::Pop, vec![]);
+            }
         }
-        self.emit(Opcode::Pop, vec![]);
         Ok(())
     }
     fn compile_block_statement(&mut self, block_statement: &BlockStatement) -> CompileResult {
@@ -73,8 +95,7 @@ impl Compiler {
     fn compile_expression(&mut self, expression: &Expression) -> CompileResult {
         match expression {
             Expression::IntLiteral(value) => {
-                let integer = Object::Integer(*value);
-                let i = self.add_constant(integer);
+                let i = self.add_constant(Constant::Integer(*value));
                 self.emit(Opcode::Constant, vec![i]);
             }
             Expression::BoolLiteral(bool) => {
@@ -122,6 +143,15 @@ impl Compiler {
                 //条件语句末尾
                 let final_pos = self.instructions.len();
                 self.change_operand(jump_always_pos, final_pos);
+            }
+            Expression::Identifier(name) => {
+                let symbol = {
+                    match self.symbol_table.borrow().resolve(name) {
+                        None => return Err(CompileError::UndefinedVariable(name.to_string())),
+                        Some(symbol) => symbol,
+                    }
+                };
+                self.load_symbol(symbol);
             }
             _ => return Err(CompileError::UnknownExpression(expression.clone())),
         }
@@ -172,9 +202,9 @@ impl Compiler {
         Ok(())
     }
     /// 常量池添加常量，返回常量索引
-    fn add_constant(&mut self, constant: Object) -> usize {
-        self.constants.push(constant);
-        self.constants.len() - 1
+    fn add_constant(&mut self, constant: Constant) -> usize {
+        self.constants.borrow_mut().push(constant);
+        self.constants.borrow().len() - 1
     }
     /// 指令表添加指令，返回指令开始位置
     fn add_instruction(&mut self, instruction: &mut Instructions) -> usize {
@@ -189,7 +219,7 @@ impl Compiler {
         self.set_last_instruction(op, pos);
         pos
     }
-    // 保存上一条指令
+    /// 保存上一条指令
     fn set_last_instruction(&mut self, op: Opcode, pos: usize) {
         let previous = self.last_instruction.clone();
         let last = EmittedInstruction {
@@ -199,11 +229,11 @@ impl Compiler {
         self.last_instruction = last;
         self.previous_instruction = previous;
     }
-    // 上一条是否为pop指令
+    /// 上一条是否为pop指令
     fn last_instruction_pop(&self) -> bool {
         self.last_instruction.op_code == Opcode::Pop
     }
-    // 移除上一条指令
+    /// 移除上一条指令
     fn remove_last_instruction(&mut self) {
         self.instructions = self.instructions[..self.last_instruction.position].to_vec();
         self.last_instruction = self.previous_instruction.clone();
@@ -211,28 +241,32 @@ impl Compiler {
     fn _last_instruction_jump(&self) -> bool {
         self.last_instruction.op_code == Opcode::JumpAlways
     }
-    // 指令替换
+    /// 指令替换
     fn replace_instruction(&mut self, pos: usize, new_instruction: Instructions) {
         for (i, inst) in new_instruction.into_iter().enumerate() {
             self.instructions[pos + i] = inst;
         }
     }
-    // 改变操作数
+    /// 改变操作数
     fn change_operand(&mut self, op_pos: usize, operand: usize) {
         let op = Opcode::from_byte(self.instructions[op_pos]).unwrap();
         let new_instruction = code::make(op, vec![operand]);
         self.replace_instruction(op_pos, new_instruction);
+    }
+
+    fn load_symbol(&mut self, symbol: Symbol) {
+        self.emit(Opcode::GetGlobal, vec![symbol.index]);
     }
 }
 
 #[derive(Debug)]
 pub struct ByteCode {
     pub instructions: Instructions,
-    pub constants: Vec<Object>,
+    pub constants: Constants,
 }
 
 impl ByteCode {
-    pub fn new(instructions: Instructions, constants: Vec<Object>) -> Self {
+    pub fn new(instructions: Instructions, constants: Constants) -> Self {
         Self {
             instructions,
             constants,
@@ -245,4 +279,6 @@ pub enum CompileError {
     UnknownBinOperator(BinaryOperator),
     _UnknownUnOperator(UnaryOperator),
     UnknownExpression(Expression),
+
+    UndefinedVariable(String),
 }

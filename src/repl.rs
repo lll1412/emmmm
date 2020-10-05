@@ -5,18 +5,24 @@ use std::rc::Rc;
 
 use vm::Vm;
 
+use crate::compiler::code::Constant;
+use crate::compiler::symbol_table::SymbolTable;
 use crate::compiler::Compiler;
 use crate::core::base::ast::Program;
 use crate::core::parser::Parser;
 use crate::eval::evaluator;
 use crate::eval::evaluator::Env;
-use crate::object::environment;
+use crate::object::{environment, Object};
 use crate::vm;
+use crate::vm::Globals;
 
 const PROMPT: &str = ">> ";
 
 pub fn start() {
-    let env = Rc::new(RefCell::new(environment::Environment::new()));
+    let env = create_rc_ref_cell(environment::Environment::new());
+    let symbol_table = create_rc_ref_cell(SymbolTable::default());
+    let constants = create_rc_ref_cell(Vec::<Constant>::new());
+    let globals = create_rc_ref_cell(Vec::<Rc<Object>>::new());
     let reader = io::stdin();
     loop {
         print!("{}", PROMPT);
@@ -44,25 +50,25 @@ pub fn start() {
             }
         } else {
             // exe_with_eval(&program, &env);
-            exe_with_vm(program, &env);
+            let mut compiler = Compiler::with_state(symbol_table.clone(), constants.clone());
+            exe_with_vm(program, &mut compiler, globals.clone());
         }
     }
 }
 
 fn _exe_with_eval(program: &Program, env: &Env) {
-    let result = evaluator::eval(&program, Rc::clone(env));
+    let result = evaluator::eval(&program, env.clone());
     match result {
         Ok(object) => println!("{}", object),
         Err(err) => eprintln!("{}", err),
     }
 }
 
-fn exe_with_vm(program: Program, _env: &Env) {
-    let mut compiler = Compiler::new();
+fn exe_with_vm(program: Program, compiler: &mut Compiler, globals: Globals) {
     let result = compiler.compile(program);
     match result {
         Ok(byte_code) => {
-            let mut vm = Vm::new(byte_code);
+            let mut vm = Vm::with_global_store(byte_code, globals.clone());
             let result = vm.run();
             match result {
                 Ok(object) => println!("{}", object),
@@ -71,4 +77,8 @@ fn exe_with_vm(program: Program, _env: &Env) {
         }
         Err(com_err) => eprintln!("{:?}", com_err),
     }
+}
+
+fn create_rc_ref_cell<T>(t: T) -> Rc<RefCell<T>> {
+    Rc::new(RefCell::new(t))
 }

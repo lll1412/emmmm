@@ -1,3 +1,4 @@
+use crate::object::Object;
 use std::fmt::{Display, Formatter};
 
 pub type Instructions = Vec<u8>;
@@ -70,6 +71,9 @@ op_build!(
         //跳转指令
         JumpIfNotTruthy(vec![2]),
         JumpAlways(vec![2]),
+        //变量绑定
+        SetGlobal(vec![2]),
+        GetGlobal(vec![2]),
         //
         Null(vec![]),
         Uninitialize(vec![]),
@@ -80,6 +84,20 @@ op_build!(
 pub struct Definition {
     pub name: String,
     pub operand_width: Vec<usize>,
+}
+#[derive(Debug, Clone, PartialEq)]
+pub enum Constant {
+    Integer(i64),
+    _String(String),
+}
+
+impl Constant {
+    pub fn to_object(&self) -> Object {
+        match self {
+            Constant::Integer(val) => Object::Integer(*val),
+            Constant::_String(val) => Object::String(val.clone()),
+        }
+    }
 }
 
 /// # 生成 指令
@@ -133,7 +151,7 @@ pub fn print_instructions(instructions: Instructions) -> String {
                 ));
                 for k in 0..operand_count {
                     let instruction_len = definition.operand_width[k]; //指令长度
-                    let operand = read_usize(&instructions, i + 1, instruction_len);
+                    let operand = read_usize(&instructions[i + 1..], instruction_len);
                     string.push_str(&format!(" {operand}", operand = operand));
                     i += instruction_len;
                 }
@@ -147,18 +165,14 @@ pub fn print_instructions(instructions: Instructions) -> String {
 }
 
 /// # 读取操作数
-pub fn read_operands(
-    def: Definition,
-    instructions: &Instructions,
-    offset: usize,
-) -> (Vec<usize>, usize) {
+pub fn read_operands(def: Definition, instructions: &[u8]) -> (Vec<usize>, usize) {
     let mut operands = Vec::with_capacity(def.operand_width.len());
     let mut bytes_read = 0;
     for width in def.operand_width {
         match width {
-            2 => operands.push(read_usize(instructions, bytes_read + offset, 2)),
+            2 => operands.push(read_usize(&instructions[bytes_read..], 2)),
             1 => {
-                operands.push(read_usize(instructions, bytes_read + offset, 1));
+                operands.push(read_usize(&instructions[bytes_read..], 1));
             }
             _ => {}
         }
@@ -168,10 +182,10 @@ pub fn read_operands(
 }
 
 /// # 从指令中读取数据并转换为usize
-pub fn read_usize(instructions: &Instructions, start: usize, n: usize) -> usize {
+pub fn read_usize(instructions: &[u8], n: usize) -> usize {
     let mut bytes = [0; 8];
     for i in 0..n {
-        bytes[8 - n + i] = instructions[start + i]
+        bytes[8 - n + i] = instructions[i]
     }
     usize::from_be_bytes(bytes)
 }

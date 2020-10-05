@@ -3,12 +3,9 @@ use std::collections::HashMap;
 use std::fmt::{Display, Formatter, Result};
 use std::rc::Rc;
 
-use crate::compiler::code::Opcode;
 use crate::core::base::ast::{BinaryOperator, BlockStatement, Expression, UnaryOperator};
 use crate::eval::evaluator::EvalResult;
 use crate::object::environment::Environment;
-use crate::vm::{VmError, VmResult, FALSE, TRUE};
-use std::ops;
 
 pub mod environment;
 
@@ -175,85 +172,6 @@ impl Display for Object {
                     .join(", ");
                 write!(f, "{{{map}}}", map = x)
             }
-        }
-    }
-}
-
-impl ops::Add for Object {
-    type Output = VmResult;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        if let Object::Integer(left) = self {
-            if let Object::Integer(right) = rhs {
-                return Ok(Object::Integer(left + right));
-            }
-        }
-        Err(VmError::UnSupportedBinOperation(Opcode::Add, self, rhs))
-    }
-}
-
-impl ops::Sub for Object {
-    type Output = VmResult;
-
-    fn sub(self, rhs: Self) -> Self::Output {
-        if let Object::Integer(left) = self {
-            if let Object::Integer(right) = rhs {
-                if right == 0 {
-                    return Err(VmError::ByZero(self, rhs));
-                }
-                return Ok(Object::Integer(left - right));
-            }
-        }
-        Err(VmError::UnSupportedBinOperation(Opcode::Add, self, rhs))
-    }
-}
-
-impl ops::Mul for Object {
-    type Output = VmResult;
-
-    fn mul(self, rhs: Self) -> Self::Output {
-        if let Object::Integer(left) = self {
-            if let Object::Integer(right) = rhs {
-                return Ok(Object::Integer(left * right));
-            }
-        }
-        Err(VmError::UnSupportedBinOperation(Opcode::Add, self, rhs))
-    }
-}
-
-impl ops::Div for Object {
-    type Output = VmResult;
-
-    fn div(self, rhs: Self) -> Self::Output {
-        if let Object::Integer(left) = self {
-            if let Object::Integer(right) = rhs {
-                return Ok(Object::Integer(left / right));
-            }
-        }
-        Err(VmError::UnSupportedBinOperation(Opcode::Add, self, rhs))
-    }
-}
-
-impl ops::Neg for Object {
-    type Output = VmResult;
-
-    fn neg(self) -> Self::Output {
-        if let Object::Integer(value) = self {
-            Ok(Object::Integer(-value))
-        } else {
-            Err(VmError::UnSupportedUnOperation(Opcode::Neg, self))
-        }
-    }
-}
-
-impl ops::Not for Object {
-    type Output = VmResult;
-
-    fn not(self) -> Self::Output {
-        if let Object::Boolean(bool) = self {
-            Ok(if bool { FALSE } else { TRUE })
-        } else {
-            Err(VmError::UnSupportedUnOperation(Opcode::Neg, self))
         }
     }
 }
