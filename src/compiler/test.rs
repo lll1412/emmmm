@@ -2,11 +2,204 @@
 mod tests {
     use std::collections::HashMap;
 
-    use crate::compiler::code::{self, make, print_instructions, Opcode};
+    use crate::compiler::code::{self, make, print_instructions, Constant, Opcode};
     use crate::compiler::symbol_table::{Symbol, SymbolTable, GLOBAL_SCOPE};
     use crate::compiler::{Compiler, Instructions};
     use crate::core::base::ast::Program;
-    use crate::object::Object;
+
+    #[test]
+    fn test_index() {
+        let tests = vec![
+            (
+                "[1,2,3][1]",
+                vec![
+                    Constant::Integer(1),
+                    Constant::Integer(2),
+                    Constant::Integer(3),
+                    Constant::Integer(1),
+                ],
+                vec![
+                    make(Opcode::Constant, vec![0]),
+                    make(Opcode::Constant, vec![1]),
+                    make(Opcode::Constant, vec![2]),
+                    make(Opcode::Array, vec![3]),
+                    make(Opcode::Constant, vec![3]),
+                    make(Opcode::Index, vec![]),
+                    make(Opcode::Pop, vec![]),
+                ],
+            ),
+            (
+                r#"{"a":1,2:"b", 1+2: "3"+ "c"}[3]"#,
+                vec![
+                    Constant::String("a".to_string()),
+                    Constant::Integer(1),
+                    Constant::Integer(2),
+                    Constant::String("b".to_string()),
+                    Constant::Integer(1),
+                    Constant::Integer(2),
+                    Constant::String("3".to_string()),
+                    Constant::String("c".to_string()),
+                    Constant::Integer(3),
+                ],
+                vec![
+                    make(Opcode::Constant, vec![0]),
+                    make(Opcode::Constant, vec![1]),
+                    make(Opcode::Constant, vec![2]),
+                    make(Opcode::Constant, vec![3]),
+                    make(Opcode::Constant, vec![4]),
+                    make(Opcode::Constant, vec![5]),
+                    make(Opcode::Add, vec![]),
+                    make(Opcode::Constant, vec![6]),
+                    make(Opcode::Constant, vec![7]),
+                    make(Opcode::Add, vec![]),
+                    make(Opcode::Hash, vec![3]),
+                    make(Opcode::Constant, vec![8]),
+                    make(Opcode::Index, vec![]),
+                    make(Opcode::Pop, vec![]),
+                ],
+            ),
+        ];
+        run_compile_test(tests);
+    }
+
+    #[test]
+    fn test_hash_literal() {
+        let tests = vec![
+            (
+                "{}",
+                vec![],
+                vec![make(Opcode::Hash, vec![0]), make(Opcode::Pop, vec![])],
+            ),
+            (
+                r#"{"a":1, "b":2, "c":3}"#,
+                vec![
+                    Constant::String("a".to_string()),
+                    Constant::Integer(1),
+                    Constant::String("b".to_string()),
+                    Constant::Integer(2),
+                    Constant::String("c".to_string()),
+                    Constant::Integer(3),
+                ],
+                vec![
+                    make(Opcode::Constant, vec![0]),
+                    make(Opcode::Constant, vec![1]),
+                    make(Opcode::Constant, vec![2]),
+                    make(Opcode::Constant, vec![3]),
+                    make(Opcode::Constant, vec![4]),
+                    make(Opcode::Constant, vec![5]),
+                    make(Opcode::Hash, vec![3]),
+                    make(Opcode::Pop, vec![]),
+                ],
+            ),
+            (
+                r#"{1+1:2+2,"hello":5*3, 10:"yo"}"#,
+                vec![
+                    Constant::Integer(1),
+                    Constant::Integer(1),
+                    Constant::Integer(2),
+                    Constant::Integer(2),
+                    Constant::String("hello".to_string()),
+                    Constant::Integer(5),
+                    Constant::Integer(3),
+                    Constant::Integer(10),
+                    Constant::String("yo".to_string()),
+                ],
+                vec![
+                    make(Opcode::Constant, vec![0]),
+                    make(Opcode::Constant, vec![1]),
+                    make(Opcode::Add, vec![]),
+                    make(Opcode::Constant, vec![2]),
+                    make(Opcode::Constant, vec![3]),
+                    make(Opcode::Add, vec![]),
+                    make(Opcode::Constant, vec![4]),
+                    make(Opcode::Constant, vec![5]),
+                    make(Opcode::Constant, vec![6]),
+                    make(Opcode::Mul, vec![]),
+                    make(Opcode::Constant, vec![7]),
+                    make(Opcode::Constant, vec![8]),
+                    make(Opcode::Hash, vec![3]),
+                    make(Opcode::Pop, vec![]),
+                ],
+            ),
+        ];
+        run_compile_test(tests);
+    }
+
+    #[test]
+    fn test_array_literals() {
+        let tests = vec![
+            (
+                "[]",
+                vec![],
+                vec![make(Opcode::Array, vec![0]), make(Opcode::Pop, vec![])],
+            ),
+            (
+                "[1, 2, 3]",
+                vec![
+                    Constant::Integer(1),
+                    Constant::Integer(2),
+                    Constant::Integer(3),
+                ],
+                vec![
+                    make(Opcode::Constant, vec![0]),
+                    make(Opcode::Constant, vec![1]),
+                    make(Opcode::Constant, vec![2]),
+                    make(Opcode::Array, vec![3]),
+                    make(Opcode::Pop, vec![]),
+                ],
+            ),
+            (
+                "[1+2, 2*3, 3-1]",
+                vec![
+                    Constant::Integer(1),
+                    Constant::Integer(2),
+                    Constant::Integer(2),
+                    Constant::Integer(3),
+                    Constant::Integer(3),
+                    Constant::Integer(1),
+                ],
+                vec![
+                    make(Opcode::Constant, vec![0]),
+                    make(Opcode::Constant, vec![1]),
+                    make(Opcode::Add, vec![]),
+                    make(Opcode::Constant, vec![2]),
+                    make(Opcode::Constant, vec![3]),
+                    make(Opcode::Mul, vec![]),
+                    make(Opcode::Constant, vec![4]),
+                    make(Opcode::Constant, vec![5]),
+                    make(Opcode::Sub, vec![]),
+                    make(Opcode::Array, vec![3]),
+                    make(Opcode::Pop, vec![]),
+                ],
+            ),
+        ];
+        run_compile_test(tests);
+    }
+
+    #[test]
+    fn test_string_expression() {
+        let tests = vec![
+            (
+                r#""hello rust""#,
+                vec![Constant::String("hello rust".to_string())],
+                vec![make(Opcode::Constant, vec![0]), make(Opcode::Pop, vec![])],
+            ),
+            (
+                r#""hello" + " world""#,
+                vec![
+                    Constant::String("hello".to_string()),
+                    Constant::String(" world".to_string()),
+                ],
+                vec![
+                    make(Opcode::Constant, vec![0]),
+                    make(Opcode::Constant, vec![1]),
+                    make(Opcode::Add, vec![]),
+                    make(Opcode::Pop, vec![]),
+                ],
+            ),
+        ];
+        run_compile_test(tests);
+    }
 
     #[test]
     fn test_define() {
@@ -78,7 +271,7 @@ mod tests {
             let b = 2;
             a
             ",
-            vec![Object::Integer(1), Object::Integer(2)],
+            vec![Constant::Integer(1), Constant::Integer(2)],
             vec![
                 make(Opcode::Constant, vec![0]),
                 make(Opcode::SetGlobal, vec![0]),
@@ -97,9 +290,9 @@ mod tests {
             (
                 "if true { 10 } else { 2333 }; 678",
                 vec![
-                    Object::Integer(10),
-                    Object::Integer(2333),
-                    Object::Integer(678),
+                    Constant::Integer(10),
+                    Constant::Integer(2333),
+                    Constant::Integer(678),
                 ],
                 vec![
                     // 0000
@@ -122,7 +315,7 @@ mod tests {
             ),
             (
                 "if true { 10 }; 678",
-                vec![Object::Integer(10), Object::Integer(678)],
+                vec![Constant::Integer(10), Constant::Integer(678)],
                 vec![
                     // 0000
                     make(Opcode::True, vec![]),
@@ -160,7 +353,7 @@ mod tests {
             ),
             (
                 "-1",
-                vec![Object::Integer(1)],
+                vec![Constant::Integer(1)],
                 vec![
                     code::make(Opcode::Constant, vec![0]),
                     code::make(Opcode::Neg, vec![]),
@@ -192,7 +385,7 @@ mod tests {
             ),
             (
                 "1>2",
-                vec![Object::Integer(1), Object::Integer(2)],
+                vec![Constant::Integer(1), Constant::Integer(2)],
                 vec![
                     code::make(Opcode::Constant, vec![0]),
                     code::make(Opcode::Constant, vec![1]),
@@ -202,7 +395,7 @@ mod tests {
             ),
             (
                 "1<2",
-                vec![Object::Integer(1), Object::Integer(2)],
+                vec![Constant::Integer(1), Constant::Integer(2)],
                 vec![
                     code::make(Opcode::Constant, vec![0]),
                     code::make(Opcode::Constant, vec![1]),
@@ -212,7 +405,7 @@ mod tests {
             ),
             (
                 "1==2",
-                vec![Object::Integer(1), Object::Integer(2)],
+                vec![Constant::Integer(1), Constant::Integer(2)],
                 vec![
                     code::make(Opcode::Constant, vec![0]),
                     code::make(Opcode::Constant, vec![1]),
@@ -222,7 +415,7 @@ mod tests {
             ),
             (
                 "1!=2",
-                vec![Object::Integer(1), Object::Integer(2)],
+                vec![Constant::Integer(1), Constant::Integer(2)],
                 vec![
                     code::make(Opcode::Constant, vec![0]),
                     code::make(Opcode::Constant, vec![1]),
@@ -280,7 +473,7 @@ mod tests {
         let tests = vec![
             (
                 "1+2;",
-                vec![Object::Integer(1), Object::Integer(2)],
+                vec![Constant::Integer(1), Constant::Integer(2)],
                 vec![
                     code::make(Opcode::Constant, vec![0]),
                     code::make(Opcode::Constant, vec![1]),
@@ -291,7 +484,7 @@ mod tests {
             (
                 "1;\
                               2",
-                vec![Object::Integer(1), Object::Integer(2)],
+                vec![Constant::Integer(1), Constant::Integer(2)],
                 vec![
                     code::make(Opcode::Constant, vec![0]),
                     code::make(Opcode::Pop, vec![]),
@@ -303,19 +496,18 @@ mod tests {
         run_compile_test(tests);
     }
 
-    fn run_compile_test(tests: Vec<(&str, Vec<Object>, Vec<Instructions>)>) {
+    fn run_compile_test(tests: Vec<(&str, Vec<Constant>, Vec<Instructions>)>) {
         for (input, expected_constants, expected_instructions) in tests {
             let program = Program::new(input);
-            let mut compiler = Compiler::new();
+            let mut compiler = Compiler::_new();
             match compiler.compile(program) {
                 Ok(byte_code) => {
-                    let object = byte_code
-                        .constants
-                        .borrow()
-                        .iter()
-                        .map(|c| c.to_object())
-                        .collect::<Vec<Object>>();
-                    assert_eq!(object, expected_constants, "bytecode: {:?}", byte_code);
+                    let constants = byte_code.constants.borrow().clone();
+                    // .borrow()
+                    // .iter()
+                    // .map(|c| c.to_object())
+                    // .collect::<Vec<Object>>();
+                    assert_eq!(constants, expected_constants, "bytecode: {:?}", byte_code);
                     assert_eq!(
                         print_instructions(byte_code.instructions.clone()),
                         print_instructions(expected_instructions.concat()),

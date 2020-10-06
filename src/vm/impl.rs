@@ -1,23 +1,39 @@
-use crate::compiler::code::{read_operands, Opcode};
-use crate::object::Object;
-use crate::vm::{Vm, VmError, VmResult, FALSE, GLOBALS_SIZE, STACK_SIZE, TRUE};
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::ops::Deref;
 use std::rc::Rc;
 
+use crate::compiler::code::{read_operands, Opcode};
+use crate::object::{HashKey, Object};
+use crate::vm::{Vm, VmError, VmResult, FALSE, GLOBALS_SIZE, NULL, STACK_SIZE, TRUE};
+
 impl Vm {
-    /// ## 最后弹出栈顶的元素
-    pub fn last_popped_stack_element(&self) -> VmResult {
-        if self.sp >= self.stack.len() {
-            Err(VmError::ArrayOutOfBound {
-                len: self.stack.len(),
-                index: self.sp,
-            })
-        } else {
-            let object = &self.stack[self.sp];
-            Ok(object.clone())
+    /// # 创建数组
+    pub fn build_array(&mut self, arr_len: usize) -> VmResult<()> {
+        let mut arr = vec![];
+        for i in self.sp - arr_len..self.sp {
+            let el = &self.stack[i];
+            arr.push(Object::clone(el));
         }
+        self.sp -= arr_len;
+        self.push_stack(Rc::new(Object::Array(RefCell::new(arr))))
     }
-    /// ## 执行二元操作
+    /// # 创建Hash
+    pub fn build_hash(&mut self, hash_len: usize) -> VmResult<()> {
+        let mut hash = HashMap::new();
+        let mut i = self.sp - 2 * hash_len;
+        while i < self.sp {
+            let k = &self.stack[i];
+            let v = &self.stack[i + 1];
+            let key =
+                HashKey::from_object(k).map_err(|err| VmError::CustomErrMsg(err.to_string()))?;
+            hash.insert(key, Object::clone(v));
+            i += 2;
+        }
+        self.sp -= hash_len;
+        self.push_stack(Rc::new(Object::Hash(RefCell::new(hash))))
+    }
+    /// # 执行二元操作
     pub fn execute_binary_operation(&mut self, op: Opcode) -> VmResult {
         let right = self.pop_stack()?;
         let left = self.pop_stack()?;
@@ -41,13 +57,38 @@ impl Vm {
                 return Ok(Rc::new(Object::Integer(r)));
             }
         }
+        if let Object::String(right_val) = right.deref() {
+            if let Object::String(left_val) = left.deref() {
+                if let Opcode::Add = op {
+                    return Ok(Rc::new(Object::String(left_val.clone() + right_val)));
+                }
+            }
+        }
         Err(VmError::UnSupportedBinOperation(
             op,
             left.deref().clone(),
             right.deref().clone(),
         ))
     }
-    /// ## 执行比较操作
+    /// # 执行索引操作
+    pub fn execute_index_operation(&self, obj: Rc<Object>, index: Rc<Object>) -> VmResult {
+        if let Object::Array(items) = obj.deref() {
+            if let Object::Integer(index) = index.deref() {
+                let value = items.borrow().get(*index as usize).cloned().unwrap_or(NULL);
+                return Ok(Rc::new(value));
+            }
+        } else if let Object::Hash(pairs) = obj.deref() {
+            let key = HashKey::from_object(&index)
+                .map_err(|err| VmError::CustomErrMsg(err.to_string()))?;
+            let value = pairs.borrow().get(&key).cloned().unwrap_or(NULL);
+            return Ok(Rc::new(value));
+        }
+        Err(VmError::UnSupportedIndexOperation(
+            Object::clone(&obj),
+            Object::clone(&index),
+        ))
+    }
+    /// # 执行比较操作
     pub fn execute_comparison_operation(&mut self, op: Opcode) -> VmResult {
         let right = self.pop_stack()?;
         let left = self.pop_stack()?;
@@ -88,16 +129,16 @@ impl Vm {
         };
         Ok(Rc::new(r))
     }
-    /// ## 计算该指令操作数的长度，方便指令指针自增
+    /// # 计算该指令操作数的长度，方便指令指针自增
     pub fn increment_num(&self, op: Opcode) -> usize {
         op.definition().operand_width.iter().sum()
     }
-    /// ## 读取一个无符号整数，并返回字节长度
+    /// # 读取一个无符号整数，并返回字节长度
     pub fn read_usize(&self, op_code: Opcode, ip: usize) -> (usize, usize) {
         let (operands, n) = read_operands(op_code.definition(), &self.instructions[ip..]);
         (operands[0], n)
     }
-    /// 压入栈中
+    /// # 压入栈中
     pub fn push_stack(&mut self, object: Rc<Object>) -> VmResult<()> {
         if self.sp == STACK_SIZE {
             Err(VmError::StackOverflow)
@@ -111,7 +152,7 @@ impl Vm {
             Ok(())
         }
     }
-    /// 弹出栈顶元素
+    /// # 弹出栈顶元素
     pub fn pop_stack(&mut self) -> VmResult {
         if self.sp == 0 {
             Err(VmError::StackNoElement)
@@ -122,7 +163,7 @@ impl Vm {
         }
     }
 
-    /// 存入全局变量
+    /// # 存入全局变量
     pub fn set_global(&mut self, global_index: usize, global: Rc<Object>) -> VmResult<()> {
         if global_index == GLOBALS_SIZE {
             Err(VmError::StackOverflow)
@@ -135,7 +176,7 @@ impl Vm {
             Ok(())
         }
     }
-    /// 取出全局变量
+    /// # 取出全局变量
     pub fn get_global(&self, global_index: usize) -> VmResult {
         let globals = self.globals.borrow();
         let option = globals.get(global_index);
@@ -146,6 +187,18 @@ impl Vm {
                 "global has not such element. index: {}",
                 global_index
             )))
+        }
+    }
+    /// # 最后弹出栈顶的元素
+    pub fn last_popped_stack_element(&self) -> VmResult {
+        if self.sp >= self.stack.len() {
+            Err(VmError::ArrayOutOfBound {
+                len: self.stack.len(),
+                index: self.sp,
+            })
+        } else {
+            let object = &self.stack[self.sp];
+            Ok(object.clone())
         }
     }
 }

@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::compiler::code::{Constant, Instructions, Opcode};
-use crate::compiler::symbol_table::{Symbol, SymbolTable};
+use crate::compiler::symbol_table::SymbolTable;
 use crate::core::base::ast::{
     BinaryOperator, BlockStatement, Expression, Program, Statement, UnaryOperator,
 };
@@ -40,14 +40,11 @@ impl EmittedInstruction {
 }
 
 impl Compiler {
-    pub fn new() -> Self {
-        Self {
-            instructions: vec![],
-            constants: Rc::new(RefCell::new(vec![])),
-            symbol_table: Rc::new(RefCell::new(SymbolTable::default())),
-            last_instruction: EmittedInstruction::default(),
-            previous_instruction: EmittedInstruction::default(),
-        }
+    pub fn _new() -> Self {
+        Self::with_state(
+            Rc::new(RefCell::new(SymbolTable::default())),
+            Rc::new(RefCell::new(vec![])),
+        )
     }
     pub fn with_state(symbol_table: RcSymbolTable, constants: Constants) -> Self {
         Self {
@@ -72,10 +69,9 @@ impl Compiler {
     /// 编译语句
     fn compile_statement(&mut self, statement: &Statement) -> CompileResult {
         match statement {
-            Statement::Let(id, expr) => {
+            Statement::Let(name, expr) => {
                 self.compile_expression(expr)?;
-                let symbol = self.symbol_table.borrow_mut().define(id);
-                self.emit(Opcode::SetGlobal, vec![symbol.index]);
+                self.store_symbol(name);
             }
             Statement::Return(_) => {}
             Statement::Expression(expr) => {
@@ -104,6 +100,31 @@ impl Compiler {
                 } else {
                     self.emit(Opcode::False, vec![]);
                 }
+            }
+            Expression::StringLiteral(string) => {
+                let i = self.add_constant(Constant::String(string.to_string()));
+                self.emit(Opcode::Constant, vec![i]);
+            }
+            Expression::ArrayLiteral(items) => {
+                for item in items {
+                    self.compile_expression(item)?;
+                }
+                self.emit(Opcode::Array, vec![items.len()]);
+            }
+            Expression::HashLiteral(pairs) => {
+                for (k, v) in pairs {
+                    self.compile_expression(k)?;
+                    self.compile_expression(v)?;
+                }
+                self.emit(Opcode::Hash, vec![pairs.len()]);
+            }
+            Expression::Index(left_expr, index_expr) => {
+                self.compile_expression(left_expr)?;
+                self.compile_expression(index_expr)?;
+                self.emit(Opcode::Index, vec![]);
+            }
+            Expression::Identifier(name) => {
+                self.load_symbol(name)?;
             }
             Expression::Unary(op, expr) => {
                 self.compile_expression(expr)?;
@@ -143,15 +164,6 @@ impl Compiler {
                 //条件语句末尾
                 let final_pos = self.instructions.len();
                 self.change_operand(jump_always_pos, final_pos);
-            }
-            Expression::Identifier(name) => {
-                let symbol = {
-                    match self.symbol_table.borrow().resolve(name) {
-                        None => return Err(CompileError::UndefinedVariable(name.to_string())),
-                        Some(symbol) => symbol,
-                    }
-                };
-                self.load_symbol(symbol);
             }
             _ => return Err(CompileError::UnknownExpression(expression.clone())),
         }
@@ -253,9 +265,21 @@ impl Compiler {
         let new_instruction = code::make(op, vec![operand]);
         self.replace_instruction(op_pos, new_instruction);
     }
-
-    fn load_symbol(&mut self, symbol: Symbol) {
-        self.emit(Opcode::GetGlobal, vec![symbol.index]);
+    /// 读取符号表元素（生成一条获取该数据的指令）
+    fn load_symbol(&mut self, name: &str) -> CompileResult {
+        let option = self.symbol_table.borrow().resolve(name);
+        match option {
+            None => return Err(CompileError::UndefinedVariable(name.to_string())),
+            Some(symbol) => {
+                self.emit(Opcode::GetGlobal, vec![symbol.index]);
+            }
+        }
+        Ok(())
+    }
+    ///
+    fn store_symbol(&mut self, name: &str) {
+        let symbol = self.symbol_table.borrow_mut().define(name);
+        self.emit(Opcode::SetGlobal, vec![symbol.index]);
     }
 }
 

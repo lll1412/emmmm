@@ -3,7 +3,6 @@ use std::fmt::{Display, Formatter};
 
 pub type Instructions = Vec<u8>;
 
-// (类名, [枚举(操作数位数), ...])
 macro_rules! op_build {
     ($name:ident, [$($var: ident($v: expr)),+,]) => {
         #[derive(Debug, Clone, Copy, PartialEq)]
@@ -46,11 +45,18 @@ macro_rules! op_build {
     };
 }
 
+// (类名, [枚举(操作数位数), ...])
 op_build!(
     Opcode,
     [
         // 常量
         Constant(vec![2]),
+        // 数组
+        Array(vec![2]),
+        // Hash
+        Hash(vec![2]),
+        // 索引操作
+        Index(vec![]),
         Pop(vec![]),
         //四则运算符
         Add(vec![]),
@@ -88,14 +94,14 @@ pub struct Definition {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Constant {
     Integer(i64),
-    _String(String),
+    String(String),
 }
 
 impl Constant {
     pub fn to_object(&self) -> Object {
         match self {
             Constant::Integer(val) => Object::Integer(*val),
-            Constant::_String(val) => Object::String(val.clone()),
+            Constant::String(val) => Object::String(val.clone()),
         }
     }
 }

@@ -20,11 +20,15 @@ pub const NULL: Object = Object::Null;
 
 #[derive(Debug)]
 pub struct Vm {
+    // 常量池
     constants: Constants,
+    // 字节码指令
     instructions: Instructions,
+    // 操作数栈
     stack: Vec<Rc<Object>>,
     // stack pointer
     sp: usize,
+    // 全局变量
     globals: Globals,
 }
 
@@ -49,17 +53,37 @@ impl Vm {
         }
     }
     pub fn run(&mut self) -> VmResult {
-        let mut instruction_pointer = 0;
-        while instruction_pointer < self.instructions.len() {
-            let opcode = Opcode::from_byte(self.instructions[instruction_pointer]);
-            instruction_pointer += 1; //从操作码后面一个位置开始
+        // ip means instruction_pointer
+        let mut ip = 0;
+        while ip < self.instructions.len() {
+            let opcode = Opcode::from_byte(self.instructions[ip]);
+            ip += 1; //从操作码后面一个位置开始
             if let Some(op_code) = opcode {
                 match op_code {
                     Opcode::Constant => {
-                        let (const_index, n) = self.read_usize(op_code, instruction_pointer);
+                        let (const_index, n) = self.read_usize(op_code, ip);
                         let constant = self.constants.borrow()[const_index].to_object();
                         self.push_stack(Rc::new(constant))?;
-                        instruction_pointer += n;
+                        ip += n;
+                    }
+
+                    Opcode::Array => {
+                        let (arr_len, n) = self.read_usize(op_code, ip);
+                        self.build_array(arr_len)?;
+                        ip += n;
+                    }
+
+                    Opcode::Hash => {
+                        let (hash_len, n) = self.read_usize(op_code, ip);
+                        self.build_hash(hash_len)?;
+                        ip += n;
+                    }
+
+                    Opcode::Index => {
+                        let index = self.pop_stack()?;
+                        let obj = self.pop_stack()?;
+                        let result = self.execute_index_operation(obj, index)?;
+                        self.push_stack(result)?;
                     }
 
                     Opcode::Add | Opcode::Sub | Opcode::Mul | Opcode::Div => {
@@ -108,16 +132,16 @@ impl Vm {
                     }
 
                     Opcode::JumpAlways => {
-                        let (jump_index, _) = self.read_usize(op_code, instruction_pointer);
-                        instruction_pointer = jump_index;
+                        let (jump_index, _) = self.read_usize(op_code, ip);
+                        ip = jump_index;
                     }
                     Opcode::JumpIfNotTruthy => {
                         let is_truthy = self.pop_stack()?;
                         if *is_truthy == FALSE || *is_truthy == NULL {
-                            let (jump_index, _) = self.read_usize(op_code, instruction_pointer);
-                            instruction_pointer = jump_index;
+                            let (jump_index, _) = self.read_usize(op_code, ip);
+                            ip = jump_index;
                         } else {
-                            instruction_pointer += self.increment_num(op_code);
+                            ip += self.increment_num(op_code);
                         }
                     }
 
@@ -126,16 +150,16 @@ impl Vm {
                     }
 
                     Opcode::SetGlobal => {
-                        let (global_index, n) = self.read_usize(op_code, instruction_pointer);
+                        let (global_index, n) = self.read_usize(op_code, ip);
                         let popped = self.pop_stack()?;
                         self.set_global(global_index, popped)?;
-                        instruction_pointer += n;
+                        ip += n;
                     }
                     Opcode::GetGlobal => {
-                        let (global_index, n) = self.read_usize(op_code, instruction_pointer);
+                        let (global_index, n) = self.read_usize(op_code, ip);
                         let object = self.get_global(global_index)?;
                         self.push_stack(object)?;
-                        instruction_pointer += n;
+                        ip += n;
                     }
                     _ => return Err(VmError::UnKnownOpCode(op_code)),
                 }
@@ -157,6 +181,7 @@ pub enum VmError {
     ByZero(Object, Object),
 
     UnSupportedUnOperation(Opcode, Object),
+    UnSupportedIndexOperation(Object, Object),
     UnKnownOpCode(Opcode),
 
     CustomErrMsg(String),

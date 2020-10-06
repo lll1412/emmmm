@@ -17,6 +17,8 @@ use crate::vm;
 use crate::vm::Globals;
 
 const PROMPT: &str = ">> ";
+const EXIT: &str = "exit\r\n";
+const ENV: &str = "env\r\n";
 
 pub fn start() {
     let env = create_rc_ref_cell(environment::Environment::new());
@@ -27,15 +29,15 @@ pub fn start() {
     loop {
         print!("{}", PROMPT);
         io::stdout().flush().unwrap();
-        let mut input: String = String::new();
+        let mut input = String::new();
 
         let i = reader.read_line(&mut input).unwrap();
-        if i == 0 || input == "exit\r\n" {
+        if i == 0 || input == EXIT {
             println!("Bye!");
             return;
         }
 
-        if input == "env\r\n" {
+        if input == ENV {
             println!("Exists Variables: {:?}", env.borrow().keys());
             continue;
         }
