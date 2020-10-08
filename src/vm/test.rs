@@ -21,6 +21,20 @@ mod tests {
             }
         };
     }
+
+    #[test]
+    fn test_assign() {
+        let tests = vec![
+            ("let a = 1; a = 2; a", Object::Integer(2)),
+            ("let arr = [1,2,3]; arr[2] = 0;arr[2]", Object::Integer(0)),
+            (
+                r#"let map = {1+1:2+2,"hello":5*3, 10:"yo"}; map[2]="new_data"; map[2]"#,
+                Object::String("new_data".to_string()),
+            ),
+        ];
+        run_vm_test(tests);
+    }
+
     #[test]
     fn test_index() {
         let tests = vec![
@@ -179,11 +193,11 @@ mod tests {
 
     fn run_vm_test(tests: Vec<(&str, Object)>) {
         for (input, expected) in tests {
-            let program = Program::new(input);
+            let program = Program::_new(input);
             let mut compiler = Compiler::_new();
             match compiler.compile(program) {
                 Ok(byte_code) => {
-                    let mut vm = Vm::new(byte_code);
+                    let mut vm = Vm::_new(byte_code);
                     match vm.run() {
                         Ok(object) => {
                             test_expected_object(input, &object, &expected);

@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::compiler::code::{Constant, Instructions, Opcode};
-use crate::compiler::symbol_table::SymbolTable;
+use crate::compiler::symbol_table::{Symbol, SymbolTable};
 use crate::core::base::ast::{
     BinaryOperator, BlockStatement, Expression, Program, Statement, UnaryOperator,
 };
@@ -76,7 +76,9 @@ impl Compiler {
             Statement::Return(_) => {}
             Statement::Expression(expr) => {
                 self.compile_expression(expr)?;
-                self.emit(Opcode::Pop, vec![]);
+                if self.last_instruction.op_code != Opcode::Assign {
+                    self.emit(Opcode::Pop, vec![]);
+                }
             }
         }
         Ok(())
@@ -131,9 +133,55 @@ impl Compiler {
                 self.compile_unary_expression(op)?;
             }
             Expression::Binary(op, left, right) => {
-                self.compile_expression(left)?;
-                self.compile_expression(right)?;
-                self.compile_binary_expression(op)?;
+                if op == &BinaryOperator::Assign {
+                    //赋值
+                    match left.as_ref() {
+                        Expression::Identifier(name) => {
+                            self.compile_expression(right)?;
+                            let option = self.symbol_table.borrow().resolve(name);
+                            //先看符号表中是否声明过该变量
+                            match option {
+                                None => {
+                                    return Err(CompileError::UndefinedVariable(name.to_string()));
+                                }
+                                Some(symbol) => self.emit(Opcode::Assign, vec![symbol.index]),
+                            };
+                        }
+                        Expression::Index(left_expr, index_expr) => match left_expr.as_ref() {
+                            Expression::Identifier(obj_name) => {
+                                self.compile_expression(right)?;
+                                self.compile_expression(index_expr)?;
+                                let option = self.symbol_table.borrow().resolve(obj_name);
+                                match option {
+                                    None => {
+                                        return Err(CompileError::UndefinedVariable(
+                                            obj_name.to_string(),
+                                        ))
+                                    }
+                                    Some(symbol) => self.emit(Opcode::Assign, vec![symbol.index]),
+                                };
+                            }
+                            _ => {
+                                return Err(CompileError::UnsupportedBinOperation(
+                                    op.clone(),
+                                    *left.clone(),
+                                    *right.clone(),
+                                ));
+                            }
+                        },
+                        _ => {
+                            return Err(CompileError::UnsupportedBinOperation(
+                                op.clone(),
+                                *left.clone(),
+                                *right.clone(),
+                            ));
+                        }
+                    }
+                } else {
+                    self.compile_expression(left)?;
+                    self.compile_expression(right)?;
+                    self.compile_binary_expression(op)?;
+                }
             }
             Expression::If(cond, cons, alt) => {
                 self.compile_expression(cond)?;
@@ -208,7 +256,6 @@ impl Compiler {
             BinaryOperator::NotEq => {
                 self.emit(Opcode::NotEqual, vec![]);
             }
-
             _ => return Err(CompileError::UnknownBinOperator(op.clone())),
         }
         Ok(())
@@ -266,15 +313,14 @@ impl Compiler {
         self.replace_instruction(op_pos, new_instruction);
     }
     /// 读取符号表元素（生成一条获取该数据的指令）
-    fn load_symbol(&mut self, name: &str) -> CompileResult {
+    fn load_symbol(&mut self, name: &str) -> CompileResult<Symbol> {
         let option = self.symbol_table.borrow().resolve(name);
-        match option {
+        let symbol = match option {
             None => return Err(CompileError::UndefinedVariable(name.to_string())),
-            Some(symbol) => {
-                self.emit(Opcode::GetGlobal, vec![symbol.index]);
-            }
-        }
-        Ok(())
+            Some(symbol) => symbol,
+        };
+        self.emit(Opcode::GetGlobal, vec![symbol.index]);
+        Ok(symbol)
     }
     ///
     fn store_symbol(&mut self, name: &str) {
@@ -301,6 +347,9 @@ impl ByteCode {
 #[derive(Debug)]
 pub enum CompileError {
     UnknownBinOperator(BinaryOperator),
+    UnsupportedBinOperation(BinaryOperator, Expression, Expression),
+    _UnsupportedIndexOperation(Expression, Expression),
+
     _UnknownUnOperator(UnaryOperator),
     UnknownExpression(Expression),
 

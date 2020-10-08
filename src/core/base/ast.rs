@@ -7,7 +7,7 @@ pub struct Program {
 }
 
 impl Program {
-    pub fn new(input: &str) -> Self {
+    pub fn _new(input: &str) -> Self {
         Parser::from(input).parse_program()
     }
 }

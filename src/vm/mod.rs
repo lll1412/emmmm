@@ -33,7 +33,7 @@ pub struct Vm {
 }
 
 impl Vm {
-    pub fn new(byte_code: ByteCode) -> Self {
+    pub fn _new(byte_code: ByteCode) -> Self {
         Self {
             constants: byte_code.constants,
             instructions: byte_code.instructions,
@@ -82,7 +82,7 @@ impl Vm {
                     Opcode::Index => {
                         let index = self.pop_stack()?;
                         let obj = self.pop_stack()?;
-                        let result = self.execute_index_operation(obj, index)?;
+                        let result = self.execute_index_operation(&obj, &index)?;
                         self.push_stack(result)?;
                     }
 
@@ -159,6 +159,11 @@ impl Vm {
                         let (global_index, n) = self.read_usize(op_code, ip);
                         let object = self.get_global(global_index)?;
                         self.push_stack(object)?;
+                        ip += n;
+                    }
+                    Opcode::Assign => {
+                        let (global_index, n) = self.read_usize(op_code, ip);
+                        self.execute_assign_operation(global_index)?;
                         ip += n;
                     }
                     _ => return Err(VmError::UnKnownOpCode(op_code)),

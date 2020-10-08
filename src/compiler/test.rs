@@ -2,10 +2,91 @@
 mod tests {
     use std::collections::HashMap;
 
-    use crate::compiler::code::{self, make, print_instructions, Constant, Opcode};
+    use crate::compiler::code::{self, make, Constant, Opcode, _print_instructions};
     use crate::compiler::symbol_table::{Symbol, SymbolTable, GLOBAL_SCOPE};
     use crate::compiler::{Compiler, Instructions};
     use crate::core::base::ast::Program;
+
+    #[test]
+    fn test_assign() {
+        let tests = vec![
+            (
+                "let a = 1; a = 2; a",
+                vec![Constant::Integer(1), Constant::Integer(2)],
+                vec![
+                    make(Opcode::Constant, vec![0]),
+                    make(Opcode::SetGlobal, vec![0]),
+                    make(Opcode::Constant, vec![1]),
+                    make(Opcode::Assign, vec![0]),
+                    make(Opcode::GetGlobal, vec![0]),
+                    make(Opcode::Pop, vec![]),
+                ],
+            ),
+            (
+                "let arr = [1,2,3]; arr[2] = 0;arr",
+                vec![
+                    Constant::Integer(1),
+                    Constant::Integer(2),
+                    Constant::Integer(3),
+                    Constant::Integer(2),
+                    Constant::Integer(0),
+                    // Constant::Integer(2),
+                ],
+                vec![
+                    make(Opcode::Constant, vec![0]),
+                    make(Opcode::Constant, vec![1]),
+                    make(Opcode::Constant, vec![2]),
+                    make(Opcode::Array, vec![3]),     //声明赋值数组
+                    make(Opcode::SetGlobal, vec![0]), //存arr
+                    make(Opcode::Constant, vec![3]),  //value
+                    make(Opcode::Constant, vec![4]),  //index
+                    make(Opcode::Assign, vec![0]),    //arr[index] = value
+                    make(Opcode::GetGlobal, vec![0]), //取arr
+                    // make(Opcode::Constant, vec![5]),  //index
+                    // make(Opcode::Index, vec![]),      //arr[index]
+                    make(Opcode::Pop, vec![]),
+                ],
+            ),
+            (
+                r#"let map = {1+1:2+2,"hello":5*3, 10:"yo"}; map[2]="new_data"; map"#,
+                vec![
+                    Constant::Integer(1),
+                    Constant::Integer(1),
+                    Constant::Integer(2),
+                    Constant::Integer(2),
+                    Constant::String("hello".to_string()),
+                    Constant::Integer(5),
+                    Constant::Integer(3),
+                    Constant::Integer(10),
+                    Constant::String("yo".to_string()),
+                    Constant::Integer(2),
+                    Constant::String("new_data".to_string()),
+                ],
+                vec![
+                    make(Opcode::Constant, vec![0]),
+                    make(Opcode::Constant, vec![1]),
+                    make(Opcode::Add, vec![]),
+                    make(Opcode::Constant, vec![2]),
+                    make(Opcode::Constant, vec![3]),
+                    make(Opcode::Add, vec![]),
+                    make(Opcode::Constant, vec![4]),
+                    make(Opcode::Constant, vec![5]),
+                    make(Opcode::Constant, vec![6]),
+                    make(Opcode::Mul, vec![]),
+                    make(Opcode::Constant, vec![7]),
+                    make(Opcode::Constant, vec![8]),
+                    make(Opcode::Hash, vec![3]),
+                    make(Opcode::SetGlobal, vec![0]), //声明初始化Map
+                    make(Opcode::Constant, vec![9]),  //value
+                    make(Opcode::Constant, vec![10]), //index
+                    make(Opcode::Assign, vec![0]),    //map[index] = value
+                    make(Opcode::GetGlobal, vec![0]), //取map
+                    make(Opcode::Pop, vec![]),
+                ],
+            ),
+        ];
+        run_compile_test(tests);
+    }
 
     #[test]
     fn test_index() {
@@ -464,7 +545,7 @@ mod tests {
 ",
         )];
         for (actual, expected) in tests {
-            assert_eq!(code::print_instructions(actual), expected);
+            assert_eq!(code::_print_instructions(actual), expected);
         }
     }
 
@@ -498,21 +579,17 @@ mod tests {
 
     fn run_compile_test(tests: Vec<(&str, Vec<Constant>, Vec<Instructions>)>) {
         for (input, expected_constants, expected_instructions) in tests {
-            let program = Program::new(input);
+            let program = Program::_new(input);
             let mut compiler = Compiler::_new();
             match compiler.compile(program) {
                 Ok(byte_code) => {
                     let constants = byte_code.constants.borrow().clone();
-                    // .borrow()
-                    // .iter()
-                    // .map(|c| c.to_object())
-                    // .collect::<Vec<Object>>();
                     assert_eq!(constants, expected_constants, "bytecode: {:?}", byte_code);
                     assert_eq!(
-                        print_instructions(byte_code.instructions.clone()),
-                        print_instructions(expected_instructions.concat()),
+                        _print_instructions(byte_code.instructions.clone()),
+                        _print_instructions(expected_instructions.concat()),
                     );
-                    println!("{}", print_instructions(byte_code.instructions));
+                    println!("{}", _print_instructions(byte_code.instructions));
                 }
                 Err(err) => panic!("{:?}", err),
             }

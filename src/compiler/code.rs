@@ -51,6 +51,8 @@ op_build!(
     [
         // 常量
         Constant(vec![2]),
+        // 标识符
+        // Identifier(vec![]),
         // 数组
         Array(vec![2]),
         // Hash
@@ -80,6 +82,8 @@ op_build!(
         //变量绑定
         SetGlobal(vec![2]),
         GetGlobal(vec![2]),
+        // 赋值操作
+        Assign(vec![2]),
         //
         Null(vec![]),
         Uninitialize(vec![]),
@@ -91,6 +95,7 @@ pub struct Definition {
     pub name: String,
     pub operand_width: Vec<usize>,
 }
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Constant {
     Integer(i64),
@@ -139,11 +144,11 @@ pub fn make(op_code: Opcode, operands: Vec<usize>) -> Instructions {
 }
 
 /// # 打印指令
-pub fn print_instructions(instructions: Instructions) -> String {
-    let mut i = 0;
+pub fn _print_instructions(instructions: Instructions) -> String {
+    let mut pc = 0;
     let mut string = String::new();
-    while i < instructions.len() {
-        let op = instructions[i];
+    while pc < instructions.len() {
+        let op = instructions[pc];
         let option = Opcode::from_byte(op);
         match option {
             None => return string,
@@ -151,18 +156,19 @@ pub fn print_instructions(instructions: Instructions) -> String {
                 let definition = op_code.definition();
                 let operand_count = definition.operand_width.len(); //操作数 数量
                 string.push_str(&format!(
-                    "{pc:04} {operator}",
-                    pc = i,
+                    "{pc:04} {operator}({op})",
+                    pc = pc,
                     operator = definition.name,
+                    op = op_code as u8
                 ));
                 for k in 0..operand_count {
                     let instruction_len = definition.operand_width[k]; //指令长度
-                    let operand = read_usize(&instructions[i + 1..], instruction_len);
-                    string.push_str(&format!(" {operand}", operand = operand));
-                    i += instruction_len;
+                    let operand = read_usize(&instructions[pc + 1..], instruction_len);
+                    string.push_str(&format!(" {operand:>02x}", operand = operand));
+                    pc += instruction_len;
                 }
                 string.push('\n');
-                i += 1;
+                pc += 1;
             }
         }
     }

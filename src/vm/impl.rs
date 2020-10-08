@@ -1,6 +1,5 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::ops::Deref;
 use std::rc::Rc;
 
 use crate::compiler::code::{read_operands, Opcode};
@@ -8,6 +7,39 @@ use crate::object::{HashKey, Object};
 use crate::vm::{Vm, VmError, VmResult, FALSE, GLOBALS_SIZE, NULL, STACK_SIZE, TRUE};
 
 impl Vm {
+    /// # 执行赋值操作
+    pub fn execute_assign_operation(&mut self, global_index: usize) -> VmResult<()> {
+        let obj = &self.get_global(global_index)?;
+        match obj.as_ref() {
+            //数组赋值
+            Object::Array(items) => {
+                let index = &self.pop_stack()?;
+                let val = &self.pop_stack()?;
+                if let Object::Integer(i) = index.as_ref() {
+                    items.borrow_mut()[*i as usize] = Object::clone(val);
+                } else {
+                    return Err(VmError::UnSupportedIndexOperation(
+                        Object::clone(obj),
+                        Object::clone(index),
+                    ));
+                }
+            }
+            // Hash赋值
+            Object::Hash(pairs) => {
+                let index = &self.pop_stack()?;
+                let val = &self.pop_stack()?;
+                let key = HashKey::from_object(index)
+                    .map_err(|err| VmError::CustomErrMsg(err.to_string()))?;
+                pairs.borrow_mut().insert(key, Object::clone(val));
+            }
+            //普通赋值
+            _ => {
+                let popped = self.pop_stack()?;
+                self.set_global(global_index, popped)?;
+            }
+        }
+        Ok(())
+    }
     /// # 创建数组
     pub fn build_array(&mut self, arr_len: usize) -> VmResult<()> {
         let mut arr = vec![];
@@ -47,7 +79,7 @@ impl Vm {
                         if right_val == 0 {
                             return Err(VmError::ByZero(
                                 Object::clone(&left),
-                                right.deref().clone(),
+                                Object::clone(&right),
                             ));
                         }
                         left_val / right_val
@@ -57,8 +89,8 @@ impl Vm {
                 return Ok(Rc::new(Object::Integer(r)));
             }
         }
-        if let Object::String(right_val) = right.deref() {
-            if let Object::String(left_val) = left.deref() {
+        if let Object::String(right_val) = right.as_ref() {
+            if let Object::String(left_val) = left.as_ref() {
                 if let Opcode::Add = op {
                     return Ok(Rc::new(Object::String(left_val.clone() + right_val)));
                 }
@@ -66,26 +98,26 @@ impl Vm {
         }
         Err(VmError::UnSupportedBinOperation(
             op,
-            left.deref().clone(),
-            right.deref().clone(),
+            Object::clone(&left),
+            Object::clone(&right),
         ))
     }
     /// # 执行索引操作
-    pub fn execute_index_operation(&self, obj: Rc<Object>, index: Rc<Object>) -> VmResult {
-        if let Object::Array(items) = obj.deref() {
-            if let Object::Integer(index) = index.deref() {
+    pub fn execute_index_operation(&self, obj: &Object, index: &Object) -> VmResult {
+        if let Object::Array(items) = obj {
+            if let Object::Integer(index) = index {
                 let value = items.borrow().get(*index as usize).cloned().unwrap_or(NULL);
                 return Ok(Rc::new(value));
             }
-        } else if let Object::Hash(pairs) = obj.deref() {
-            let key = HashKey::from_object(&index)
+        } else if let Object::Hash(pairs) = obj {
+            let key = HashKey::from_object(index)
                 .map_err(|err| VmError::CustomErrMsg(err.to_string()))?;
             let value = pairs.borrow().get(&key).cloned().unwrap_or(NULL);
             return Ok(Rc::new(value));
         }
         Err(VmError::UnSupportedIndexOperation(
-            Object::clone(&obj),
-            Object::clone(&index),
+            obj.clone(),
+            index.clone(),
         ))
     }
     /// # 执行比较操作
@@ -122,8 +154,8 @@ impl Vm {
             _ => {
                 return Err(VmError::UnSupportedBinOperation(
                     op,
-                    left.deref().clone(),
-                    right.deref().clone(),
+                    Object::clone(&left),
+                    Object::clone(&right),
                 ));
             }
         };
