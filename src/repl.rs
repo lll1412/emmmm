@@ -1,4 +1,3 @@
-use std::cell::RefCell;
 use std::io;
 use std::io::Write;
 use std::rc::Rc;
@@ -13,8 +12,8 @@ use crate::core::parser::Parser;
 use crate::eval::evaluator;
 use crate::eval::evaluator::Env;
 use crate::object::{environment, Object};
-use crate::vm;
 use crate::vm::Globals;
+use crate::{create_rc_ref_cell, vm};
 
 const PROMPT: &str = ">> ";
 const EXIT: &str = "exit\r\n";
@@ -22,7 +21,7 @@ const ENV: &str = "env\r\n";
 
 pub fn start() {
     let env = create_rc_ref_cell(environment::Environment::new());
-    let symbol_table = create_rc_ref_cell(SymbolTable::default());
+    let symbol_table = create_rc_ref_cell(SymbolTable::new());
     let constants = create_rc_ref_cell(Vec::<Constant>::new());
     let globals = create_rc_ref_cell(Vec::<Rc<Object>>::new());
     let reader = io::stdin();
@@ -79,8 +78,4 @@ fn exe_with_vm(program: Program, compiler: &mut Compiler, globals: Globals) {
         }
         Err(com_err) => eprintln!("{:?}", com_err),
     }
-}
-
-fn create_rc_ref_cell<T>(t: T) -> Rc<RefCell<T>> {
-    Rc::new(RefCell::new(t))
 }

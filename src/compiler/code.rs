@@ -1,10 +1,11 @@
-use crate::object::Object;
 use std::fmt::{Display, Formatter};
+
+use crate::object::Object;
 
 pub type Instructions = Vec<u8>;
 
 macro_rules! op_build {
-    ($name:ident, [$($var: ident($v: expr)),+,]) => {
+    ($name:ident, [$($var: ident($($v: expr),*)),+,]) => {
         #[derive(Debug, Clone, Copy, PartialEq)]
         #[repr(u8)]
         pub enum $name {
@@ -26,7 +27,9 @@ macro_rules! op_build {
                     $(
                         Self::$var => Definition {
                                     name: Self::$var.to_string(),
-                                    operand_width: $v,
+                                    operand_width: vec![$(
+                                        $v,
+                                    )*],
                                 },
                     )+
                 }
@@ -50,43 +53,49 @@ op_build!(
     Opcode,
     [
         // 常量
-        Constant(vec![2]),
-        // 标识符
-        // Identifier(vec![]),
+        Constant(2),
         // 数组
-        Array(vec![2]),
+        Array(2),
         // Hash
-        Hash(vec![2]),
+        Hash(2),
         // 索引操作
-        Index(vec![]),
-        Pop(vec![]),
+        Index(),
+        Pop(),
         //四则运算符
-        Add(vec![]),
-        Sub(vec![]),
-        Mul(vec![]),
-        Div(vec![]),
+        Add(),
+        Sub(),
+        Mul(),
+        Div(),
         //布尔字面常量
-        True(vec![]),
-        False(vec![]),
+        True(),
+        False(),
         //比较运算符
-        Equal(vec![]),
-        NotEqual(vec![]),
-        GreaterThan(vec![]),
-        LessThan(vec![]),
+        Equal(),
+        NotEqual(),
+        GreaterThan(),
+        LessThan(),
         //一元运算符
-        Neg(vec![]),
-        Not(vec![]),
+        Neg(),
+        Not(),
         //跳转指令
-        JumpIfNotTruthy(vec![2]),
-        JumpAlways(vec![2]),
-        //变量绑定
-        SetGlobal(vec![2]),
-        GetGlobal(vec![2]),
+        JumpIfNotTruthy(2),
+        JumpAlways(2),
+        //全局变量绑定
+        SetGlobal(2),
+        GetGlobal(2),
+        //局部变量
+        SetLocal(1),
+        GetLocal(1),
         // 赋值操作
-        Assign(vec![2]),
+        Assign(2),
+        // 函数调用
+        Call(1),
+        // 函数返回值
+        ReturnValue(),
+        Return(),
         //
-        Null(vec![]),
-        Uninitialize(vec![]),
+        Null(),
+        Uninitialize(),
     ]
 );
 
@@ -100,6 +109,7 @@ pub struct Definition {
 pub enum Constant {
     Integer(i64),
     String(String),
+    CompiledFunction(Instructions, usize, usize),
 }
 
 impl Constant {
@@ -107,7 +117,23 @@ impl Constant {
         match self {
             Constant::Integer(val) => Object::Integer(*val),
             Constant::String(val) => Object::String(val.clone()),
+            Constant::CompiledFunction(insts, num_locals, num_parameters) => {
+                Object::CompiledFunction(insts.clone(), *num_locals, *num_parameters)
+            }
         }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct CompiledFunction {
+    pub insts: Instructions,
+    pub num_locals: usize,
+    pub num_parameters: usize
+}
+
+impl CompiledFunction {
+    pub fn new(insts: Instructions, num_locals: usize, num_parameters: usize) -> Self {
+        Self { insts, num_locals, num_parameters}
     }
 }
 
@@ -137,14 +163,24 @@ pub fn make(op_code: Opcode, operands: Vec<usize>) -> Instructions {
                 let x = *operand.to_be_bytes().last().unwrap();
                 instructions.push(x);
             }
-            _ => {}
+            _ => unimplemented!(),
         }
     }
     instructions
 }
+pub fn _make(op_code: Opcode, index: usize) -> Instructions {
+    make(op_code, vec![index])
+}
+pub fn _make_const(index: usize) -> Instructions {
+    make(Opcode::Constant, vec![index])
+}
+
+pub fn _make_noop(op_code: Opcode) -> Instructions {
+    make(op_code, vec![])
+}
 
 /// # 打印指令
-pub fn _print_instructions(instructions: Instructions) -> String {
+pub fn _print_instructions(instructions: &Instructions) -> String {
     let mut pc = 0;
     let mut string = String::new();
     while pc < instructions.len() {
@@ -164,7 +200,7 @@ pub fn _print_instructions(instructions: Instructions) -> String {
                 for k in 0..operand_count {
                     let instruction_len = definition.operand_width[k]; //指令长度
                     let operand = read_usize(&instructions[pc + 1..], instruction_len);
-                    string.push_str(&format!(" {operand:>02x}", operand = operand));
+                    string.push_str(&format!(" {operand:>02X}", operand = operand));
                     pc += instruction_len;
                 }
                 string.push('\n');
@@ -186,7 +222,7 @@ pub fn read_operands(def: Definition, instructions: &[u8]) -> (Vec<usize>, usize
             1 => {
                 operands.push(read_usize(&instructions[bytes_read..], 1));
             }
-            _ => {}
+            _ => unimplemented!(),
         }
         bytes_read += width;
     }

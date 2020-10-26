@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::compiler::code::{Constant, Instructions, Opcode};
-use crate::compiler::symbol_table::{Symbol, SymbolTable};
+use crate::compiler::symbol_table::{Symbol, SymbolScope, SymbolTable};
 use crate::core::base::ast::{
     BinaryOperator, BlockStatement, Expression, Program, Statement, UnaryOperator,
 };
@@ -15,13 +15,12 @@ type CompileResult<T = ()> = std::result::Result<T, CompileError>;
 pub type Constants = Rc<RefCell<Vec<Constant>>>;
 pub type RcSymbolTable = Rc<RefCell<SymbolTable>>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Compiler {
-    instructions: Instructions,
     constants: Constants,
     symbol_table: RcSymbolTable,
-    last_instruction: EmittedInstruction,
-    previous_instruction: EmittedInstruction,
+    scopes: Vec<CompilationScope>,
+    scope_index: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -30,8 +29,61 @@ pub struct EmittedInstruction {
     pub position: usize,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct CompilationScope {
+    instructions: Instructions,
+    last_instruction: Option<EmittedInstruction>,
+    previous_instruction: Option<EmittedInstruction>,
+}
+
+impl CompilationScope {
+    fn new() -> Self {
+        Default::default()
+    }
+    // 判断上条指令是否为
+    fn last_instruction_is(&self, op: Opcode) -> bool {
+        match &self.last_instruction {
+            None => false,
+            Some(last) => last.op_code == op,
+        }
+    }
+    fn _cur_instruction(&self) -> &Instructions {
+        &self.instructions
+    }
+    // 记录为为上条指令
+    fn set_last_instruction(&mut self, inst: EmittedInstruction) {
+        self.previous_instruction = self.last_instruction.clone();
+        self.last_instruction = Some(inst)
+    }
+    // 移除上一条指令
+    fn remove_last_instruction(&mut self) -> CompileResult {
+        let last_instruction = &self.last_instruction;
+        if let Some(last) = last_instruction {
+            self.instructions = self.instructions[..last.position].to_vec();
+            self.last_instruction = self.previous_instruction.clone();
+            Ok(())
+        } else {
+            Err(CompileError::CustomErrMsg(
+                "have no last instruction".to_string(),
+            ))
+        }
+    }
+    // 指令替换
+    fn replace_instruction(&mut self, pos: usize, new_instruction: Instructions) {
+        for (i, inst) in new_instruction.into_iter().enumerate() {
+            self.instructions[pos + i] = inst;
+        }
+    }
+    // 添加指令
+    fn add_instruction(&mut self, instruction: &mut Instructions) -> usize {
+        let pos_new_ins = self.instructions.len();
+        self.instructions.append(instruction);
+        pos_new_ins
+    }
+}
+
 impl EmittedInstruction {
-    fn default() -> Self {
+    fn _default() -> Self {
         Self {
             op_code: Opcode::Uninitialize,
             position: 0,
@@ -41,18 +93,17 @@ impl EmittedInstruction {
 
 impl Compiler {
     pub fn _new() -> Self {
-        Self::with_state(
-            Rc::new(RefCell::new(SymbolTable::default())),
-            Rc::new(RefCell::new(vec![])),
-        )
+        let sb = Rc::new(RefCell::new(SymbolTable::new()));
+        let c = Constants::new(RefCell::new(vec![]));
+        Compiler::with_state(sb, c)
     }
     pub fn with_state(symbol_table: RcSymbolTable, constants: Constants) -> Self {
-        Self {
-            instructions: vec![],
+        let main_scope = CompilationScope::new();
+        Compiler {
             constants,
             symbol_table,
-            last_instruction: EmittedInstruction::default(),
-            previous_instruction: EmittedInstruction::default(),
+            scopes: vec![main_scope],
+            scope_index: 1,
         }
     }
     /// 编译为字节码
@@ -60,12 +111,38 @@ impl Compiler {
         for statement in &program.statements {
             self.compile_statement(statement)?;
         }
-        Ok(ByteCode::new(
-            self.instructions.clone(),
-            self.constants.clone(),
-        ))
+        Ok(self.bytecode())
     }
-
+    pub fn bytecode(&mut self) -> ByteCode {
+        ByteCode::new(self.cur_instruction().clone(), self.constants.clone())
+    }
+    fn enter_scope(&mut self) {
+        //当前作用域
+        let scope = CompilationScope {
+            instructions: vec![],
+            last_instruction: None,
+            previous_instruction: None,
+        };
+        //入栈
+        if self.scope_index >= self.scopes.len() {
+            self.scopes.push(scope);
+        } else {
+            self.scopes[self.scope_index] = scope;
+        }
+        self.scope_index += 1;
+        //进入下级符号表
+        self.symbol_table = SymbolTable::new_enclosed(self.symbol_table.clone())
+    }
+    fn leave_scope(&mut self) -> Instructions {
+        //退回上级符号表
+        let st = SymbolTable::clone(&self.symbol_table.borrow());
+        self.symbol_table = st.outer.unwrap();
+        // let x = (&*self.symbol_table).borrow_mut().outer.clone().unwrap();
+        // self.symbol_table = x;
+        //出栈
+        self.scope_index -= 1;
+        self.scopes[self.scope_index].instructions.clone()
+    }
     /// 编译语句
     fn compile_statement(&mut self, statement: &Statement) -> CompileResult {
         match statement {
@@ -73,10 +150,18 @@ impl Compiler {
                 self.compile_expression(expr)?;
                 self.store_symbol(name);
             }
-            Statement::Return(_) => {}
+            Statement::Return(ret) => match ret {
+                None => {
+                    self.emit(Opcode::Return, vec![]);
+                }
+                Some(expr) => {
+                    self.compile_expression(expr)?;
+                    self.emit(Opcode::ReturnValue, vec![]);
+                }
+            },
             Statement::Expression(expr) => {
                 self.compile_expression(expr)?;
-                if self.last_instruction.op_code != Opcode::Assign {
+                if !self.last_instruction_is(Opcode::Assign) {
                     self.emit(Opcode::Pop, vec![]);
                 }
             }
@@ -138,28 +223,13 @@ impl Compiler {
                     match left.as_ref() {
                         Expression::Identifier(name) => {
                             self.compile_expression(right)?;
-                            let option = self.symbol_table.borrow().resolve(name);
-                            //先看符号表中是否声明过该变量
-                            match option {
-                                None => {
-                                    return Err(CompileError::UndefinedVariable(name.to_string()));
-                                }
-                                Some(symbol) => self.emit(Opcode::Assign, vec![symbol.index]),
-                            };
+                            self.compile_assign(name)?;
                         }
                         Expression::Index(left_expr, index_expr) => match left_expr.as_ref() {
                             Expression::Identifier(obj_name) => {
-                                self.compile_expression(right)?;
                                 self.compile_expression(index_expr)?;
-                                let option = self.symbol_table.borrow().resolve(obj_name);
-                                match option {
-                                    None => {
-                                        return Err(CompileError::UndefinedVariable(
-                                            obj_name.to_string(),
-                                        ))
-                                    }
-                                    Some(symbol) => self.emit(Opcode::Assign, vec![symbol.index]),
-                                };
+                                self.compile_expression(right)?;
+                                self.compile_assign(obj_name)?;
                             }
                             _ => {
                                 return Err(CompileError::UnsupportedBinOperation(
@@ -191,27 +261,60 @@ impl Compiler {
                 // if语句是一个表达式有pop,
                 // 编译语句块之后会多一个pop,
                 // 语句块最后的值需要保存到栈上,作为if的返回值,不能在内部pop掉
-                if self.last_instruction_pop() {
+                if self.last_instruction_is(Opcode::Pop) {
                     // 移除pop指令
-                    self.remove_last_instruction();
+                    self.remove_last_instruction()?;
                 }
                 //如果if语句块正常执行到这，就不能继续后面的else块，应该跳转到整个语句末尾
                 let jump_always_pos = self.emit(Opcode::JumpAlways, vec![9999]);
                 //将条件不成立跳转位置设定为当前位置
-                let after_cons_pos = self.instructions.len();
+                let after_cons_pos = self.cur_instruction_len();
                 self.change_operand(jump_if_not_truthy_pos, after_cons_pos);
                 // 如果有else语句块
                 if let Some(alt) = alt {
                     self.compile_block_statement(alt)?;
-                    if self.last_instruction_pop() {
-                        self.remove_last_instruction();
+                    if self.last_instruction_is(Opcode::Pop) {
+                        self.remove_last_instruction()?;
                     }
                 } else {
                     self.emit(Opcode::Null, vec![]);
                 }
                 //条件语句末尾
-                let final_pos = self.instructions.len();
+                let final_pos = self.cur_instruction_len();
                 self.change_operand(jump_always_pos, final_pos);
+            }
+            Expression::FunctionLiteral(args, blocks) => {
+                self.enter_scope();
+                //参数列表
+                for arg in args {
+                    self.symbol_table.borrow_mut().define(arg);
+                }
+                //编译语句块
+                self.compile_block_statement(blocks)?;
+                //如果最后一条指令是pop，说明有返回值，改为return_value
+                if self.last_instruction_is(Opcode::Pop) {
+                    self.remove_last_instruction()?;
+                    self.emit(Opcode::ReturnValue, vec![]);
+                }
+                //如果没有返回值
+                if !self.last_instruction_is(Opcode::ReturnValue) {
+                    self.emit(Opcode::Return, vec![]);
+                }
+                //局部变量个数
+                let num_locals = self.symbol_table_len();
+                //编译后的函数常量
+                let compiled_fn = self.leave_scope();
+                let constant = Constant::CompiledFunction(compiled_fn, num_locals, args.len());
+                let const_index = self.add_constant(constant);
+                //函数常量索引
+                self.emit(Opcode::Constant, vec![const_index]);
+            }
+            Expression::Call(fun, args) => {
+                self.compile_expression(fun)?;
+                for arg in args {
+                    self.compile_expression(arg)?;
+                }
+                self.emit(Opcode::Call, vec![args.len()]);
             }
             _ => return Err(CompileError::UnknownExpression(expression.clone())),
         }
@@ -267,9 +370,7 @@ impl Compiler {
     }
     /// 指令表添加指令，返回指令开始位置
     fn add_instruction(&mut self, instruction: &mut Instructions) -> usize {
-        let pos_new_ins = self.instructions.len();
-        self.instructions.append(instruction);
-        pos_new_ins
+        self.scopes[self.scope_index - 1].add_instruction(instruction)
     }
     /// 生成指令
     fn emit(&mut self, op: Opcode, operands: Vec<usize>) -> usize {
@@ -280,35 +381,37 @@ impl Compiler {
     }
     /// 保存上一条指令
     fn set_last_instruction(&mut self, op: Opcode, pos: usize) {
-        let previous = self.last_instruction.clone();
         let last = EmittedInstruction {
             op_code: op,
             position: pos,
         };
-        self.last_instruction = last;
-        self.previous_instruction = previous;
-    }
-    /// 上一条是否为pop指令
-    fn last_instruction_pop(&self) -> bool {
-        self.last_instruction.op_code == Opcode::Pop
+        self.scopes[self.scope_index - 1].set_last_instruction(last)
     }
     /// 移除上一条指令
-    fn remove_last_instruction(&mut self) {
-        self.instructions = self.instructions[..self.last_instruction.position].to_vec();
-        self.last_instruction = self.previous_instruction.clone();
-    }
-    fn _last_instruction_jump(&self) -> bool {
-        self.last_instruction.op_code == Opcode::JumpAlways
+    fn remove_last_instruction(&mut self) -> CompileResult {
+        self.scopes[self.scope_index - 1].remove_last_instruction()
     }
     /// 指令替换
     fn replace_instruction(&mut self, pos: usize, new_instruction: Instructions) {
-        for (i, inst) in new_instruction.into_iter().enumerate() {
-            self.instructions[pos + i] = inst;
-        }
+        self.scopes[self.scope_index - 1].replace_instruction(pos, new_instruction);
     }
+    fn last_instruction_is(&mut self, op: Opcode) -> bool {
+        if self.cur_instruction_len() == 0 {
+            return false;
+        }
+        self.scopes[self.scope_index - 1].last_instruction_is(op)
+    }
+    fn cur_instruction(&mut self) -> &Instructions {
+        &self.scopes[self.scope_index - 1].instructions
+    }
+    fn cur_instruction_len(&mut self) -> usize {
+        self.cur_instruction().len()
+    }
+
     /// 改变操作数
     fn change_operand(&mut self, op_pos: usize, operand: usize) {
-        let op = Opcode::from_byte(self.instructions[op_pos]).unwrap();
+        let b = self.cur_instruction()[op_pos];
+        let op = Opcode::from_byte(b).expect(&format!("没有此操作码:{:4x}", b));
         let new_instruction = code::make(op, vec![operand]);
         self.replace_instruction(op_pos, new_instruction);
     }
@@ -319,13 +422,35 @@ impl Compiler {
             None => return Err(CompileError::UndefinedVariable(name.to_string())),
             Some(symbol) => symbol,
         };
-        self.emit(Opcode::GetGlobal, vec![symbol.index]);
+        let op = match symbol.scope {
+            SymbolScope::GLOBAL => Opcode::GetGlobal,
+            SymbolScope::LOCAL => Opcode::GetLocal,
+        };
+        self.emit(op, vec![symbol.index]);
         Ok(symbol)
     }
-    ///
+    //
     fn store_symbol(&mut self, name: &str) {
         let symbol = self.symbol_table.borrow_mut().define(name);
-        self.emit(Opcode::SetGlobal, vec![symbol.index]);
+        let op = match symbol.scope {
+            SymbolScope::GLOBAL => Opcode::SetGlobal,
+            SymbolScope::LOCAL => Opcode::SetLocal,
+        };
+        self.emit(op, vec![symbol.index]);
+    }
+
+    fn symbol_table_len(&self) -> usize {
+        self.symbol_table.borrow().num_definitions
+    }
+    fn compile_assign(&mut self, name: &str) -> CompileResult<()> {
+        let option = self.symbol_table.borrow().resolve(name);
+        match option {
+            None => {
+                return Err(CompileError::UndefinedVariable(name.to_string()));
+            }
+            Some(symbol) => self.emit(Opcode::Assign, vec![symbol.index]),
+        };
+        Ok(())
     }
 }
 
@@ -354,4 +479,5 @@ pub enum CompileError {
     UnknownExpression(Expression),
 
     UndefinedVariable(String),
+    CustomErrMsg(String),
 }

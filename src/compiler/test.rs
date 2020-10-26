@@ -2,10 +2,408 @@
 mod tests {
     use std::collections::HashMap;
 
-    use crate::compiler::code::{self, make, Constant, Opcode, _print_instructions};
-    use crate::compiler::symbol_table::{Symbol, SymbolTable, GLOBAL_SCOPE};
+    use crate::compiler::code::{
+        self, _make, _make_const, _make_noop, _print_instructions, make, Constant, Opcode,
+    };
+    use crate::compiler::symbol_table::{Symbol, SymbolScope, SymbolTable};
     use crate::compiler::{Compiler, Instructions};
     use crate::core::base::ast::Program;
+    use crate::create_rc_ref_cell;
+
+    macro_rules! hash {
+        {} => {
+            HashMap::new()
+        }
+        ;
+        {$($k:expr => $v:expr),+,} => {
+            {
+            let mut map = HashMap::new();
+            $(
+                map.insert($k, $v);
+            )+
+            map
+            }
+        };
+    }
+    // #[test]
+    // fn test_compiler_scope() {}
+    #[test]
+    fn test_let_statement_scope() {
+        let tests = vec![
+            (
+                r"
+            let num = 55; 
+            fn() { num }",
+                vec![
+                    Constant::Integer(55),
+                    Constant::CompiledFunction(
+                        vec![_make(Opcode::GetGlobal, 0), _make_noop(Opcode::ReturnValue)].concat(),
+                        0,0
+                    ),
+                ],
+                vec![
+                    _make_const(0),
+                    _make(Opcode::SetGlobal, 0),
+                    _make_const(1),
+                    _make_noop(Opcode::Pop),
+                ],
+            ),
+            (
+                r"
+            fn() {
+                let num = 55;
+                num
+            }
+            ",
+                vec![
+                    Constant::Integer(55),
+                    Constant::CompiledFunction(
+                        vec![
+                            _make_const(0),
+                            _make(Opcode::SetLocal, 0),
+                            _make(Opcode::GetLocal, 0),
+                            _make_noop(Opcode::ReturnValue),
+                        ]
+                        .concat(),
+                        1,0
+                    ),
+                ],
+                vec![_make_const(1), _make_noop(Opcode::Pop)],
+            ),
+            (
+                r"
+            fn() {
+                let a = 1;
+                let b = 2;
+                return a + b
+            }
+            ",
+                vec![
+                    Constant::Integer(1),
+                    Constant::Integer(2),
+                    Constant::CompiledFunction(
+                        vec![
+                            _make_const(0),
+                            _make(Opcode::SetLocal, 0),
+                            _make_const(1),
+                            _make(Opcode::SetLocal, 1),
+                            _make(Opcode::GetLocal, 0),
+                            _make(Opcode::GetLocal, 1),
+                            _make_noop(Opcode::Add),
+                            _make_noop(Opcode::ReturnValue),
+                        ]
+                        .concat(),
+                        2,0
+                    ),
+                ],
+                vec![_make_const(2), _make_noop(Opcode::Pop)],
+            ),
+        ];
+        run_compile_test(tests);
+    }
+
+    #[test]
+    fn test_function_call_with_args() {
+        let tests = vec![
+            (
+                r"
+            let global_num = 10;
+            let sum = fn(a, b) {
+                let c = a + b
+                c + global_num
+            }
+            let outer = fn() {
+                sum(1, 2) + sum(3, 4) + global_num
+            }
+            outer() + global_num
+                ",
+                vec![
+                    Constant::Integer(10),
+                    Constant::CompiledFunction(
+                        vec![
+                            _make(Opcode::GetLocal, 0),
+                            _make(Opcode::GetLocal, 1),
+                            _make_noop(Opcode::Add),
+                            _make(Opcode::SetLocal, 2),
+                            _make(Opcode::GetLocal, 2),
+                            _make(Opcode::GetGlobal, 0),
+                            _make_noop(Opcode::Add),
+                            _make_noop(Opcode::ReturnValue),
+                        ]
+                        .concat(),
+                        3,2
+                    ),
+                    Constant::Integer(1),
+                    Constant::Integer(2),
+                    Constant::Integer(3),
+                    Constant::Integer(4),
+                    Constant::CompiledFunction(
+                        vec![
+                            _make(Opcode::GetGlobal, 1),
+                            _make_const(2),
+                            _make_const(3),
+                            _make(Opcode::Call, 2),
+                            _make(Opcode::GetGlobal, 1),
+                            _make_const(4),
+                            _make_const(5),
+                            _make(Opcode::Call, 2),
+                            _make_noop(Opcode::Add),
+                            _make(Opcode::GetGlobal, 0),
+                            _make_noop(Opcode::Add),
+                            _make_noop(Opcode::ReturnValue),
+                        ]
+                        .concat(),
+                        0,0
+                    ),
+                ],
+                vec![
+                    _make_const(0),
+                    _make(Opcode::SetGlobal, 0),
+                    _make_const(1),
+                    _make(Opcode::SetGlobal, 1),
+                    _make_const(6),
+                    _make(Opcode::SetGlobal, 2),
+                    _make(Opcode::GetGlobal, 2),
+                    _make(Opcode::Call, 0),
+                    _make(Opcode::GetGlobal, 0),
+                    _make_noop(Opcode::Add),
+                    _make_noop(Opcode::Pop),
+                ],
+            ),
+            (
+                r"
+                let g = 123;
+                let d = 234;
+                let one_arg = fn(a) { a };
+                one_arg(233);
+                ",
+                vec![
+                    Constant::Integer(123),
+                    Constant::Integer(234),
+                    Constant::CompiledFunction(
+                        vec![_make(Opcode::GetLocal, 0), _make_noop(Opcode::ReturnValue)].concat(),
+                        1,1
+                    ),
+                    Constant::Integer(233),
+                ],
+                vec![
+                    _make_const(0),
+                    _make(Opcode::SetGlobal, 0),
+                    _make_const(1),
+                    _make(Opcode::SetGlobal, 1),
+                    _make_const(2),
+                    _make(Opcode::SetGlobal, 2),
+                    _make(Opcode::GetGlobal, 2),
+                    _make_const(3),
+                    _make(Opcode::Call, 1),
+                    _make_noop(Opcode::Pop),
+                ],
+            ),
+            (
+                r"
+                let g = 111;
+                let many_arg = fn(a, b, c) { a + b + c + g };
+                many_arg(2, 3, 4);
+                ",
+                vec![
+                    Constant::Integer(111),
+                    Constant::CompiledFunction(
+                        vec![
+                            _make(Opcode::GetLocal, 0),
+                            _make(Opcode::GetLocal, 1),
+                            _make_noop(Opcode::Add),
+                            _make(Opcode::GetLocal, 2),
+                            _make_noop(Opcode::Add),
+                            _make(Opcode::GetGlobal, 0),
+                            _make_noop(Opcode::Add),
+                            _make_noop(Opcode::ReturnValue),
+                        ]
+                        .concat(),
+                        3,3
+                    ),
+                    Constant::Integer(2),
+                    Constant::Integer(3),
+                    Constant::Integer(4),
+                ],
+                vec![
+                    _make_const(0),
+                    _make(Opcode::SetGlobal, 0),
+                    _make_const(1),
+                    _make(Opcode::SetGlobal, 1),
+                    _make(Opcode::GetGlobal, 1),
+                    _make_const(2),
+                    _make_const(3),
+                    _make_const(4),
+                    _make(Opcode::Call, 3),
+                    _make_noop(Opcode::Pop),
+                ],
+            ),
+        ];
+        run_compile_test(tests);
+    }
+
+    #[test]
+    fn test_function_call() {
+        let tests = vec![
+            (
+                r"
+                fn() { 1 + 12 }();
+                ",
+                vec![
+                    Constant::Integer(1),
+                    Constant::Integer(12),
+                    Constant::CompiledFunction(
+                        vec![
+                            _make_const(0),
+                            _make_const(1),
+                            _make_noop(Opcode::Add),
+                            _make_noop(Opcode::ReturnValue),
+                        ]
+                        .concat(),
+                        0,0
+                    ),
+                ],
+                vec![
+                    _make_const(2),
+                    _make(Opcode::Call, 0),
+                    _make_noop(Opcode::Pop),
+                ],
+            ),
+            (
+                r"
+                let one_arg = fn(a) {  };
+                one_arg(233);
+                ",
+                vec![
+                    Constant::CompiledFunction(vec![_make_noop(Opcode::Return)].concat(), 1,1),
+                    Constant::Integer(233),
+                ],
+                vec![
+                    _make_const(0),
+                    _make(Opcode::SetGlobal, 0),
+                    _make(Opcode::GetGlobal, 0),
+                    _make_const(1),
+                    _make(Opcode::Call, 1),
+                    _make_noop(Opcode::Pop),
+                ],
+            ),
+            (
+                r#"
+                    let m = fn() { 1 + 12 }
+                    m()
+                "#,
+                vec![
+                    Constant::Integer(1),
+                    Constant::Integer(12),
+                    Constant::CompiledFunction(
+                        vec![
+                            _make_const(0),
+                            _make_const(1),
+                            _make_noop(Opcode::Add),
+                            _make_noop(Opcode::ReturnValue),
+                        ]
+                        .concat(),
+                        0,0
+                    ),
+                ],
+                vec![
+                    _make_const(2),
+                    make(Opcode::SetGlobal, vec![0]),
+                    make(Opcode::GetGlobal, vec![0]),
+                    _make(Opcode::Call, 0),
+                    _make_noop(Opcode::Pop),
+                ],
+            ),
+            (
+                r#"
+                    let one = fn() { 1 }
+                    let two = fn() { 2 }
+                    one() + two()
+                "#,
+                vec![
+                    Constant::Integer(1),
+                    Constant::CompiledFunction(
+                        vec![_make_const(0), _make_noop(Opcode::ReturnValue)].concat(),
+                        0,0
+                    ),
+                    Constant::Integer(2),
+                    Constant::CompiledFunction(
+                        vec![_make_const(2), _make_noop(Opcode::ReturnValue)].concat(),
+                        0,0
+                    ),
+                ],
+                vec![
+                    // let one = fn1
+                    _make_const(1),
+                    make(Opcode::SetGlobal, vec![0]),
+                    // let two = fn2
+                    _make_const(3),
+                    make(Opcode::SetGlobal, vec![1]),
+                    // one()
+                    make(Opcode::GetGlobal, vec![0]),
+                    _make(Opcode::Call, 0),
+                    // two()
+                    make(Opcode::GetGlobal, vec![1]),
+                    _make(Opcode::Call, 0),
+                    // one() + two()
+                    _make_noop(Opcode::Add),
+                    _make_noop(Opcode::Pop),
+                ],
+            ),
+        ];
+        run_compile_test(tests);
+    }
+
+    #[test]
+    fn test_functions() {
+        let tests = vec![
+            (
+                r#"fn() { return 5 + 10 }"#,
+                vec![
+                    Constant::Integer(5),
+                    Constant::Integer(10),
+                    Constant::CompiledFunction(
+                        vec![
+                            _make_const(0),
+                            _make_const(1),
+                            _make_noop(Opcode::Add),
+                            _make_noop(Opcode::ReturnValue),
+                        ]
+                        .concat(),
+                        0,0
+                    ),
+                ],
+                vec![_make_const(2), _make_noop(Opcode::Pop)],
+            ),
+            (
+                r#"fn() { 5 + 10 }"#,
+                vec![
+                    Constant::Integer(5),
+                    Constant::Integer(10),
+                    Constant::CompiledFunction(
+                        vec![
+                            _make_const(0),
+                            _make_const(1),
+                            _make_noop(Opcode::Add),
+                            _make_noop(Opcode::ReturnValue),
+                        ]
+                        .concat(),
+                        0,0
+                    ),
+                ],
+                vec![_make_const(2), _make_noop(Opcode::Pop)],
+            ),
+            (
+                r#"fn() { }"#,
+                vec![Constant::CompiledFunction(
+                    vec![_make_noop(Opcode::Return)].concat(),
+                    0, 0
+                )],
+                vec![_make_const(0), _make_noop(Opcode::Pop)],
+            ),
+        ];
+        run_compile_test(tests);
+    }
 
     #[test]
     fn test_assign() {
@@ -38,8 +436,8 @@ mod tests {
                     make(Opcode::Constant, vec![2]),
                     make(Opcode::Array, vec![3]),     //声明赋值数组
                     make(Opcode::SetGlobal, vec![0]), //存arr
-                    make(Opcode::Constant, vec![3]),  //value
-                    make(Opcode::Constant, vec![4]),  //index
+                    make(Opcode::Constant, vec![3]),  //index
+                    make(Opcode::Constant, vec![4]),  //value
                     make(Opcode::Assign, vec![0]),    //arr[index] = value
                     make(Opcode::GetGlobal, vec![0]), //取arr
                     // make(Opcode::Constant, vec![5]),  //index
@@ -77,8 +475,8 @@ mod tests {
                     make(Opcode::Constant, vec![8]),
                     make(Opcode::Hash, vec![3]),
                     make(Opcode::SetGlobal, vec![0]), //声明初始化Map
-                    make(Opcode::Constant, vec![9]),  //value
-                    make(Opcode::Constant, vec![10]), //index
+                    make(Opcode::Constant, vec![9]),  //index
+                    make(Opcode::Constant, vec![10]), //value
                     make(Opcode::Assign, vec![0]),    //map[index] = value
                     make(Opcode::GetGlobal, vec![0]), //取map
                     make(Opcode::Pop, vec![]),
@@ -290,7 +688,7 @@ mod tests {
                 "a",
                 Symbol {
                     name: "a".to_string(),
-                    scope: GLOBAL_SCOPE,
+                    scope: SymbolScope::GLOBAL,
                     index: 0,
                 },
             );
@@ -298,13 +696,13 @@ mod tests {
                 "b",
                 Symbol {
                     name: "b".to_string(),
-                    scope: GLOBAL_SCOPE,
+                    scope: SymbolScope::GLOBAL,
                     index: 1,
                 },
             );
             map
         };
-        let mut global = SymbolTable::default();
+        let mut global = SymbolTable::new();
         let a = global.define("a");
         assert_eq!(a, expected["a"]);
         let b = global.define("b");
@@ -313,7 +711,7 @@ mod tests {
 
     #[test]
     fn test_resolve() {
-        let mut global = SymbolTable::default();
+        let mut global = SymbolTable::new();
         let _a = global.define("a");
         let _b = global.define("b");
         let expected = {
@@ -322,7 +720,7 @@ mod tests {
                 "a",
                 Symbol {
                     name: "a".to_string(),
-                    scope: GLOBAL_SCOPE,
+                    scope: SymbolScope::GLOBAL,
                     index: 0,
                 },
             );
@@ -330,14 +728,85 @@ mod tests {
                 "b",
                 Symbol {
                     name: "b".to_string(),
-                    scope: GLOBAL_SCOPE,
+                    scope: SymbolScope::GLOBAL,
                     index: 1,
                 },
             );
             map
         };
-        for (k, v) in &expected {
+        for (k, v) in expected {
             let x = global
+                .resolve(k)
+                .expect(&format!("name {} not resolvable", k));
+            assert_eq!(x, v.clone());
+        }
+    }
+
+    #[test]
+    fn test_resolve_local() {
+        let global = create_rc_ref_cell(SymbolTable::new());
+        global.borrow_mut().define("a");
+        global.borrow_mut().define("b");
+        let first = SymbolTable::new_enclosed(global.clone());
+        first.borrow_mut().define("c");
+        first.borrow_mut().define("d");
+        let second = SymbolTable::new_enclosed(global.clone());
+        second.borrow_mut().define("e");
+        second.borrow_mut().define("f");
+        let expected = hash! {
+                "a"=> Symbol {
+                name: "a".to_string(),
+                scope: SymbolScope::GLOBAL,
+                index: 0
+                },
+                "b"=> Symbol {
+                name: "b".to_string(),
+                scope: SymbolScope::GLOBAL,
+                index: 1
+                },
+                "c"=> Symbol {
+                    name: "c".to_string(),
+                    scope: SymbolScope::LOCAL,
+                    index: 0
+                },
+                "d"=> Symbol {
+                    name: "d".to_string(),
+                    scope: SymbolScope::LOCAL,
+                    index: 1
+                },
+        };
+        for (k, v) in expected {
+            let x = first
+                .borrow()
+                .resolve(k)
+                .expect(&format!("name {} not resolvable", k));
+            assert_eq!(x, v.clone());
+        }
+        let expected = hash! {
+                "a"=> Symbol {
+                name: "a".to_string(),
+                scope: SymbolScope::GLOBAL,
+                index: 0
+                },
+                 "b"=> Symbol {
+                name: "b".to_string(),
+                scope: SymbolScope::GLOBAL,
+                index: 1
+                },
+                "e"=> Symbol {
+                    name: "e".to_string(),
+                    scope: SymbolScope::LOCAL,
+                    index: 0
+                },
+                "f"=> Symbol {
+                    name: "f".to_string(),
+                    scope: SymbolScope::LOCAL,
+                    index: 1
+                },
+        };
+        for (k, v) in expected {
+            let x = second
+                .borrow()
                 .resolve(k)
                 .expect(&format!("name {} not resolvable", k));
             assert_eq!(x, v.clone());
@@ -535,17 +1004,21 @@ mod tests {
                 code::make(Opcode::Constant, vec![65534]),
                 code::make(Opcode::Add, vec![]),
                 code::make(Opcode::Pop, vec![]),
+                code::make(Opcode::SetLocal, vec![0]),
+                code::make(Opcode::GetLocal, vec![0]),
             ]
             .concat(),
-            r"0000 OpConstant 1
-0003 OpConstant 2
-0006 OpConstant 65534
-0009 OpAdd
-0010 OpPop
+            r"0000 OpConstant(0) 01
+0003 OpConstant(0) 02
+0006 OpConstant(0) FFFE
+0009 OpAdd(5)
+0010 OpPop(4)
+0011 OpSetLocal(21) 00
+0013 OpGetLocal(22) 00
 ",
         )];
         for (actual, expected) in tests {
-            assert_eq!(code::_print_instructions(actual), expected);
+            assert_eq!(code::_print_instructions(&actual), expected);
         }
     }
 
@@ -584,14 +1057,24 @@ mod tests {
             match compiler.compile(program) {
                 Ok(byte_code) => {
                     let constants = byte_code.constants.borrow().clone();
-                    assert_eq!(constants, expected_constants, "bytecode: {:?}", byte_code);
+                    // dbg!(&compiler);
                     assert_eq!(
-                        _print_instructions(byte_code.instructions.clone()),
-                        _print_instructions(expected_instructions.concat()),
+                        constants,
+                        expected_constants,
+                        "\nconstant:\n{}",
+                        constants
+                            .iter()
+                            .map(|c| c.to_object())
+                            .fold(String::new(), |a, b| a + "\n" + &b.to_string())
                     );
-                    println!("{}", _print_instructions(byte_code.instructions));
+                    assert_eq!(
+                        _print_instructions(&byte_code.instructions),
+                        _print_instructions(&expected_instructions.concat()),
+                        "\ninstructions:\n{}",
+                        _print_instructions(&byte_code.instructions)
+                    );
                 }
-                Err(err) => panic!("{:?}", err),
+                Err(err) => panic!("input: {}, \nerror:{:?}", input, err),
             }
         }
     }
@@ -604,6 +1087,7 @@ mod tests {
                 vec![0xFFFE],
                 vec![Opcode::Constant as u8, 0xFF, 0xFE],
             ),
+            (Opcode::SetLocal, vec![0], vec![Opcode::SetLocal as u8, 0]),
             (Opcode::Add, vec![], vec![Opcode::Add as u8]),
         ];
         for (op, operands, expected) in tests.into_iter() {

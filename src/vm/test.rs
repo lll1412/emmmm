@@ -1,11 +1,13 @@
 #[cfg(test)]
 mod tests {
+    use std::cell::RefCell;
+    use std::collections::HashMap;
+
     use crate::compiler::Compiler;
     use crate::core::base::ast::Program;
     use crate::object::{HashKey, Object};
-    use crate::vm::Vm;
-    use std::cell::RefCell;
-    use std::collections::HashMap;
+    use crate::vm::{Vm, VmError};
+
     macro_rules! hash {
         {} => {
             HashMap::new()
@@ -20,6 +22,163 @@ mod tests {
             map
             }
         };
+    }
+    #[test]
+    fn call_with_wrong_arguments() {
+        let tests = vec![
+            ("fn() {1;}(1)", VmError::WrongArgumentCount(0, 1)),
+            ("fn(a) {a;}()", VmError::WrongArgumentCount(1, 0)),
+            ("fn(a, b) {a;}(2)", VmError::WrongArgumentCount(2, 1)),
+        ];
+        run_vm_test_error(tests);
+    }
+
+    #[test]
+    fn test_call_with_args_and_bindings() {
+        let tests = vec![(
+            r"
+            let global_num = 10;
+            let sum = fn(a, b) {
+                let c = a + b
+                c + global_num
+            }
+            sum(12,18)
+            ",
+            Object::Integer(40),
+        )];
+        run_vm_test(tests);
+    }
+
+    #[test]
+    fn test_call_with_binding() {
+        let tests = vec![
+            (
+                r"
+            let sum = fn(a, b) {
+                let c = a + b;
+                c;
+            };
+            sum(1, 2);
+            ",
+                Object::Integer(3),
+            ),
+            (
+                r"
+            let sum = fn(a, b) {
+            let c = a + b;
+            c;
+            };
+            sum(1, 2) + sum(3, 4);
+            ",
+                Object::Integer(10),
+            ),
+            (
+                r"
+            let sum = fn(a, b) {
+            let c = a + b;
+            c;
+            };
+            let outer = fn() {
+                sum(1, 2) + sum(3, 4);
+            };
+            outer();
+            ",
+                Object::Integer(10),
+            ),
+            (
+                r"
+            let one = fn(a) { a }
+            one(233)
+            ",
+                Object::Integer(233),
+            ),
+            (
+                r"
+            let add = fn(a, b) { a + b }
+            add(2, 3)
+            ",
+                Object::Integer(5),
+            ),
+            (
+                r"
+            let one = fn() { let a = 1; a }
+            one()
+            ",
+                Object::Integer(1),
+            ),
+            (
+                r"
+            let oneAndTwo = fn() { 
+                let one = 1;
+                let two = 2;
+                return one + two;
+            }
+            oneAndTwo()
+            ",
+                Object::Integer(3),
+            ),
+            (
+                r"
+            let oneAndTwo = fn() { let one = 1; let two = 2; one + two }
+            let threeAndFour = fn() { let three = 3; let four = 4; three + four }
+            oneAndTwo() + threeAndFour()
+            ",
+                Object::Integer(10),
+            ),
+            (
+                r"
+            let firstFoobar = fn() { let foobar = 50; foobar; };
+            let secondFoobar = fn() { let foobar = 100; foobar; };
+            firstFoobar() + secondFoobar();
+            ",
+                Object::Integer(150),
+            ),
+            (
+                r"
+            let globalSeed = 50;
+            let minusOne = fn() {
+                let num = 1;
+                globalSeed - num;
+            }
+            let minusTwo = fn() {
+                let num = 2;
+                globalSeed - num;
+            }
+            minusOne() + minusTwo();
+            ",
+                Object::Integer(97),
+            ),
+        ];
+        run_vm_test(tests);
+    }
+
+    #[test]
+    fn test_call() {
+        let tests = vec![
+            (
+                r"
+            let one_plus_two = fn() { 1 + 5 };
+            one_plus_two();
+            ",
+                Object::Integer(6),
+            ),
+            (
+                r"
+            let null = fn() {  }
+            null()
+            ",
+                Object::Null,
+            ),
+            (
+                r"
+            let one = fn() { 1 }
+            let two = fn() { return 2; 3 }
+            one() + two()
+            ",
+                Object::Integer(3),
+            ),
+        ];
+        run_vm_test(tests);
     }
 
     #[test]
@@ -193,6 +352,7 @@ mod tests {
 
     fn run_vm_test(tests: Vec<(&str, Object)>) {
         for (input, expected) in tests {
+            println!("start:\n{}", input);
             let program = Program::_new(input);
             let mut compiler = Compiler::_new();
             match compiler.compile(program) {
@@ -204,6 +364,22 @@ mod tests {
                         }
                         Err(e) => panic!("Input: {}\nVm Error: {:?}", input, e),
                     };
+                }
+                Err(e) => panic!("Input: {}\nCompiler Error: {:?}", input, e),
+            }
+        }
+    }
+
+    fn run_vm_test_error(tests: Vec<(&str, VmError)>) {
+        for (input, expected) in tests {
+            let program = Program::_new(input);
+            let mut compiler = Compiler::_new();
+            match compiler.compile(program) {
+                Ok(byte_code) => {
+                    let mut vm = Vm::_new(byte_code);
+                    if let Err(err) = vm.run() {
+                        assert_eq!(err, expected, "error input:\n{}", input);
+                    }
                 }
                 Err(e) => panic!("Input: {}\nCompiler Error: {:?}", input, e),
             }

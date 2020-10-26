@@ -3,11 +3,13 @@ use std::collections::HashMap;
 use std::fmt::{Display, Formatter, Result};
 use std::rc::Rc;
 
+use crate::compiler::code::{Instructions, _print_instructions};
 use crate::core::base::ast::{BinaryOperator, BlockStatement, Expression, UnaryOperator};
 use crate::eval::evaluator::EvalResult;
 use crate::object::environment::Environment;
 
 pub mod environment;
+pub mod builtins;
 
 type BuiltinFunction = fn(Vec<Object>) -> EvalResult<Object>;
 
@@ -20,6 +22,7 @@ pub enum Object {
     Array(RefCell<Vec<Object>>),
     Hash(RefCell<HashMap<HashKey, Object>>),
     Function(Vec<String>, BlockStatement, Rc<RefCell<Environment>>),
+    CompiledFunction(Instructions, usize, usize),
     Builtin(BuiltinFunction),
     Return(Box<Object>),
     Null,
@@ -171,6 +174,9 @@ impl Display for Object {
                     .collect::<Vec<String>>()
                     .join(", ");
                 write!(f, "{{{map}}}", map = x)
+            }
+            Object::CompiledFunction(insts, _num_locals, _num_parameters) => {
+                write!(f, "{}", _print_instructions(insts))
             }
         }
     }

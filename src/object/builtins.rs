@@ -15,7 +15,7 @@ pub struct Builtin {
     builtin: Object,
 }
 
-pub const BUILTINS: &[Builtin] = &[
+const BUILTINS: &[Builtin] = &[
     builtin!(len),
     builtin!(first),
     builtin!(last),
@@ -108,6 +108,7 @@ pub fn print(args: Vec<Object>) -> EvalResult {
         .for_each(|s| println!("{}", s));
     Ok(Object::Null)
 }
+
 fn assert_argument_count(expected: usize, args: &[Object]) -> EvalResult<()> {
     if expected != args.len() {
         Err(EvalError::BuiltinIncorrectArgNum(expected, args.len()))

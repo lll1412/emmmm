@@ -1,7 +1,7 @@
 use crate::core::base::ast::{
     BinaryOperator, BlockStatement, Expression, Program, Statement, UnaryOperator,
 };
-use crate::eval::builtins::lookup;
+use crate::object::builtins::lookup;
 use crate::object::environment::Environment;
 use crate::object::Object::Boolean;
 use crate::object::{EvalError, HashKey, Object};
