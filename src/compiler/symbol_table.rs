@@ -1,12 +1,15 @@
-use crate::compiler::RcSymbolTable;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
+use crate::compiler::RcSymbolTable;
+use crate::object::builtins::Builtin;
+
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum SymbolScope {
-    GLOBAL,
-    LOCAL,
+    Global,
+    Local,
+    Builtin,
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -33,9 +36,9 @@ impl SymbolTable {
     }
     pub fn define(&mut self, name: &str) -> Symbol {
         let scope = if self.outer.is_none() {
-            SymbolScope::GLOBAL
+            SymbolScope::Global
         } else {
-            SymbolScope::LOCAL
+            SymbolScope::Local
         };
         let symbol = Symbol {
             name: String::from(name),
@@ -46,7 +49,15 @@ impl SymbolTable {
         self.num_definitions += 1;
         symbol
     }
-
+    pub fn define_builtin(&mut self, index: usize, builtin: &Builtin) {
+        let name = builtin.name.to_string();
+        let symbol = Symbol {
+            name: name.clone(),
+            scope: SymbolScope::Builtin,
+            index,
+        };
+        self.store.insert(name, symbol);
+    }
     pub fn resolve(&self, name: &str) -> Option<Symbol> {
         self.store.get(name).cloned().or_else(|| {
             self.outer

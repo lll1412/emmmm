@@ -1,6 +1,8 @@
+use std::cell::RefCell;
+
 use crate::eval::evaluator::EvalResult;
 use crate::object::{EvalError, Object};
-use std::cell::RefCell;
+
 macro_rules! builtin {
     ($name:ident) => {
         Builtin {
@@ -10,12 +12,13 @@ macro_rules! builtin {
     };
 }
 
+#[derive(Debug)]
 pub struct Builtin {
-    name: &'static str,
-    builtin: Object,
+    pub name: &'static str,
+    pub builtin: Object,
 }
 
-const BUILTINS: &[Builtin] = &[
+pub const BUILTINS: &[Builtin] = &[
     builtin!(len),
     builtin!(first),
     builtin!(last),

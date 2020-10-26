@@ -6,6 +6,7 @@ use crate::compiler::symbol_table::{Symbol, SymbolScope, SymbolTable};
 use crate::core::base::ast::{
     BinaryOperator, BlockStatement, Expression, Program, Statement, UnaryOperator,
 };
+use crate::object::builtins::BUILTINS;
 
 pub mod code;
 pub mod symbol_table;
@@ -98,6 +99,9 @@ impl Compiler {
         Compiler::with_state(sb, c)
     }
     pub fn with_state(symbol_table: RcSymbolTable, constants: Constants) -> Self {
+        for (i, builtin) in BUILTINS.iter().enumerate() {//预编译内置函数
+            symbol_table.borrow_mut().define_builtin(i, builtin);
+        }
         let main_scope = CompilationScope::new();
         Compiler {
             constants,
@@ -419,12 +423,13 @@ impl Compiler {
     fn load_symbol(&mut self, name: &str) -> CompileResult<Symbol> {
         let option = self.symbol_table.borrow().resolve(name);
         let symbol = match option {
-            None => return Err(CompileError::UndefinedVariable(name.to_string())),
+            None => return Err(CompileError::UndefinedIdentifier(name.to_string())),
             Some(symbol) => symbol,
         };
         let op = match symbol.scope {
-            SymbolScope::GLOBAL => Opcode::GetGlobal,
-            SymbolScope::LOCAL => Opcode::GetLocal,
+            SymbolScope::Global => Opcode::GetGlobal,
+            SymbolScope::Local => Opcode::GetLocal,
+            SymbolScope::Builtin => Opcode::GetBuiltin,
         };
         self.emit(op, vec![symbol.index]);
         Ok(symbol)
@@ -433,8 +438,9 @@ impl Compiler {
     fn store_symbol(&mut self, name: &str) {
         let symbol = self.symbol_table.borrow_mut().define(name);
         let op = match symbol.scope {
-            SymbolScope::GLOBAL => Opcode::SetGlobal,
-            SymbolScope::LOCAL => Opcode::SetLocal,
+            SymbolScope::Global => Opcode::SetGlobal,
+            SymbolScope::Local => Opcode::SetLocal,
+            _ => unimplemented!(),
         };
         self.emit(op, vec![symbol.index]);
     }
@@ -446,7 +452,7 @@ impl Compiler {
         let option = self.symbol_table.borrow().resolve(name);
         match option {
             None => {
-                return Err(CompileError::UndefinedVariable(name.to_string()));
+                return Err(CompileError::UndefinedIdentifier(name.to_string()));
             }
             Some(symbol) => self.emit(Opcode::Assign, vec![symbol.index]),
         };
@@ -478,6 +484,6 @@ pub enum CompileError {
     _UnknownUnOperator(UnaryOperator),
     UnknownExpression(Expression),
 
-    UndefinedVariable(String),
+    UndefinedIdentifier(String),
     CustomErrMsg(String),
 }

@@ -2,10 +2,10 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use crate::compiler::code::{read_operands, CompiledFunction, Opcode};
+use crate::compiler::code::{CompiledFunction, Opcode, read_operands};
 use crate::object::{HashKey, Object};
+use crate::vm::{FALSE, GLOBALS_SIZE, NULL, RCFrame, STACK_SIZE, TRUE, Vm, VmError, VmResult};
 use crate::vm::frame::Frame;
-use crate::vm::{RCFrame, Vm, VmError, VmResult, FALSE, GLOBALS_SIZE, NULL, STACK_SIZE, TRUE};
 
 impl Vm {
     /// # 执行赋值操作
@@ -174,11 +174,24 @@ impl Vm {
             if arg_nums != *num_parameters {
                 return Err(VmError::WrongArgumentCount(*num_parameters, arg_nums));
             }
-            let frame = Frame::new(CompiledFunction::new(insts.clone(), *num_locals, arg_nums), self.sp);
+            let frame = Frame::new(
+                CompiledFunction::new(insts.clone(), *num_locals, arg_nums),
+                self.sp,
+            );
             //Equivalent to
             self.sp += num_locals;
             // self.sp = frame.base_pointer + num_locals;
             self.push_frame(frame); //进入函数内部（下一帧）
+            Ok(())
+        } else if let Object::Builtin(builtin_fun) = cf {
+            //内置函数
+            let mut v = vec![];
+            for i in 0..arg_nums {
+                let rc = &self.stack[self.sp + i];
+                v.push(Object::clone(rc));
+            }
+            let r = builtin_fun(v).map_err(|e| VmError::CustomErrMsg(e.to_string()))?;
+            self.push_stack(Rc::new(r))?;
             Ok(())
         } else {
             Err(VmError::CustomErrMsg("calling non-function".to_string()))
@@ -245,6 +258,17 @@ impl Vm {
             Err(VmError::CustomErrMsg(format!(
                 "global has not such element. index: {}",
                 global_index
+            )))
+        }
+    }
+    pub fn get_builtin(&self, builtin_index: usize) -> VmResult {
+        let option = self.builtins.get(builtin_index);
+        if let Some(builtin_fun) = option {
+            Ok(builtin_fun.clone())
+        } else {
+            Err(VmError::CustomErrMsg(format!(
+                "builtin has not such element. index: {}",
+                builtin_index
             )))
         }
     }

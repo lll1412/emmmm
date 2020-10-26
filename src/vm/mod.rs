@@ -1,9 +1,10 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::compiler::code::{CompiledFunction, Opcode};
 use crate::compiler::{ByteCode, Constants};
+use crate::compiler::code::{CompiledFunction, Opcode};
 use crate::create_rc_ref_cell;
+use crate::object::builtins::BUILTINS;
 use crate::object::Object;
 use crate::vm::frame::Frame;
 
@@ -35,6 +36,8 @@ pub struct Vm {
     sp: usize,
     // 全局变量
     globals: Globals,
+    //内置函数
+    builtins: Vec<Rc<Object>>,
     //栈帧
     frames: Vec<RCFrame>,
 }
@@ -55,11 +58,16 @@ impl Vm {
         let main_frame = Frame::new(main_fn, 0);
         let mut frames = Vec::with_capacity(MAX_FRAMES);
         frames.push(main_frame);
+        let mut builtins = vec![];
+        for x in BUILTINS {
+            builtins.push(Rc::new((&x.builtin).clone()));
+        }
         Self {
             constants: byte_code.constants,
             stack,
             sp: 0,
             globals,
+            builtins,
             frames,
         }
     }
@@ -188,6 +196,13 @@ impl Vm {
                         self.push_stack(object)?;
                     }
 
+                    Opcode::GetBuiltin => {
+                        let (built_index, n) = self.read_usize(op_code, ip);
+                        let builtin = self.get_builtin(built_index)?;
+                        self.push_stack(builtin)?;
+                        self.current_frame_ip_inc(n);
+                    }
+
                     Opcode::Assign => {
                         let (global_index, n) = self.read_usize(op_code, ip);
                         self.execute_assign_operation(global_index)?;
@@ -235,5 +250,5 @@ pub enum VmError {
 
     CustomErrMsg(String),
 
-    WrongArgumentCount(usize, usize)
+    WrongArgumentCount(usize, usize),
 }

@@ -86,6 +86,8 @@ op_build!(
         //局部变量
         SetLocal(1),
         GetLocal(1),
+        //内置函数
+        GetBuiltin(1),
         // 赋值操作
         Assign(2),
         // 函数调用

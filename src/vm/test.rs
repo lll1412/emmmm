@@ -23,6 +23,14 @@ mod tests {
             }
         };
     }
+
+    #[test]
+    fn builtin_function() {
+        let tests = vec![
+            ("len([1,2,3])", Object::Integer(3))
+        ];
+        run_vm_test(tests);
+    }
     #[test]
     fn call_with_wrong_arguments() {
         let tests = vec![

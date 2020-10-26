@@ -2,11 +2,11 @@
 mod tests {
     use std::collections::HashMap;
 
+    use crate::compiler::{Compiler, Instructions};
     use crate::compiler::code::{
-        self, _make, _make_const, _make_noop, _print_instructions, make, Constant, Opcode,
+        self, _make, _make_const, _make_noop, _print_instructions, Constant, make, Opcode,
     };
     use crate::compiler::symbol_table::{Symbol, SymbolScope, SymbolTable};
-    use crate::compiler::{Compiler, Instructions};
     use crate::core::base::ast::Program;
     use crate::create_rc_ref_cell;
 
@@ -25,8 +25,28 @@ mod tests {
             }
         };
     }
-    // #[test]
-    // fn test_compiler_scope() {}
+    #[test]
+    fn builtins() {
+        let tests = vec![(
+            r"
+            len([]);
+            push([], 1);
+            ",
+            vec![Constant::Integer(1)],
+            vec![
+                _make(Opcode::GetBuiltin, 0),
+                _make(Opcode::Array, 0),
+                _make(Opcode::Call, 1),
+                _make_noop(Opcode::Pop),
+                _make(Opcode::GetBuiltin, 4),
+                _make(Opcode::Array, 0),
+                _make_const(0),
+                _make(Opcode::Call, 2),
+                _make_noop(Opcode::Pop),
+            ],
+        )];
+        run_compile_test(tests);
+    }
     #[test]
     fn test_let_statement_scope() {
         let tests = vec![
@@ -38,7 +58,8 @@ mod tests {
                     Constant::Integer(55),
                     Constant::CompiledFunction(
                         vec![_make(Opcode::GetGlobal, 0), _make_noop(Opcode::ReturnValue)].concat(),
-                        0,0
+                        0,
+                        0,
                     ),
                 ],
                 vec![
@@ -65,7 +86,8 @@ mod tests {
                             _make_noop(Opcode::ReturnValue),
                         ]
                         .concat(),
-                        1,0
+                        1,
+                        0,
                     ),
                 ],
                 vec![_make_const(1), _make_noop(Opcode::Pop)],
@@ -93,7 +115,8 @@ mod tests {
                             _make_noop(Opcode::ReturnValue),
                         ]
                         .concat(),
-                        2,0
+                        2,
+                        0,
                     ),
                 ],
                 vec![_make_const(2), _make_noop(Opcode::Pop)],
@@ -131,7 +154,8 @@ mod tests {
                             _make_noop(Opcode::ReturnValue),
                         ]
                         .concat(),
-                        3,2
+                        3,
+                        2,
                     ),
                     Constant::Integer(1),
                     Constant::Integer(2),
@@ -153,7 +177,8 @@ mod tests {
                             _make_noop(Opcode::ReturnValue),
                         ]
                         .concat(),
-                        0,0
+                        0,
+                        0,
                     ),
                 ],
                 vec![
@@ -182,7 +207,8 @@ mod tests {
                     Constant::Integer(234),
                     Constant::CompiledFunction(
                         vec![_make(Opcode::GetLocal, 0), _make_noop(Opcode::ReturnValue)].concat(),
-                        1,1
+                        1,
+                        1,
                     ),
                     Constant::Integer(233),
                 ],
@@ -219,7 +245,8 @@ mod tests {
                             _make_noop(Opcode::ReturnValue),
                         ]
                         .concat(),
-                        3,3
+                        3,
+                        3,
                     ),
                     Constant::Integer(2),
                     Constant::Integer(3),
@@ -260,7 +287,8 @@ mod tests {
                             _make_noop(Opcode::ReturnValue),
                         ]
                         .concat(),
-                        0,0
+                        0,
+                        0,
                     ),
                 ],
                 vec![
@@ -275,7 +303,7 @@ mod tests {
                 one_arg(233);
                 ",
                 vec![
-                    Constant::CompiledFunction(vec![_make_noop(Opcode::Return)].concat(), 1,1),
+                    Constant::CompiledFunction(vec![_make_noop(Opcode::Return)].concat(), 1, 1),
                     Constant::Integer(233),
                 ],
                 vec![
@@ -303,7 +331,8 @@ mod tests {
                             _make_noop(Opcode::ReturnValue),
                         ]
                         .concat(),
-                        0,0
+                        0,
+                        0,
                     ),
                 ],
                 vec![
@@ -324,12 +353,14 @@ mod tests {
                     Constant::Integer(1),
                     Constant::CompiledFunction(
                         vec![_make_const(0), _make_noop(Opcode::ReturnValue)].concat(),
-                        0,0
+                        0,
+                        0,
                     ),
                     Constant::Integer(2),
                     Constant::CompiledFunction(
                         vec![_make_const(2), _make_noop(Opcode::ReturnValue)].concat(),
-                        0,0
+                        0,
+                        0,
                     ),
                 ],
                 vec![
@@ -370,7 +401,8 @@ mod tests {
                             _make_noop(Opcode::ReturnValue),
                         ]
                         .concat(),
-                        0,0
+                        0,
+                        0,
                     ),
                 ],
                 vec![_make_const(2), _make_noop(Opcode::Pop)],
@@ -388,7 +420,8 @@ mod tests {
                             _make_noop(Opcode::ReturnValue),
                         ]
                         .concat(),
-                        0,0
+                        0,
+                        0,
                     ),
                 ],
                 vec![_make_const(2), _make_noop(Opcode::Pop)],
@@ -397,7 +430,8 @@ mod tests {
                 r#"fn() { }"#,
                 vec![Constant::CompiledFunction(
                     vec![_make_noop(Opcode::Return)].concat(),
-                    0, 0
+                    0,
+                    0,
                 )],
                 vec![_make_const(0), _make_noop(Opcode::Pop)],
             ),
@@ -688,7 +722,7 @@ mod tests {
                 "a",
                 Symbol {
                     name: "a".to_string(),
-                    scope: SymbolScope::GLOBAL,
+                    scope: SymbolScope::Global,
                     index: 0,
                 },
             );
@@ -696,7 +730,7 @@ mod tests {
                 "b",
                 Symbol {
                     name: "b".to_string(),
-                    scope: SymbolScope::GLOBAL,
+                    scope: SymbolScope::Global,
                     index: 1,
                 },
             );
@@ -720,7 +754,7 @@ mod tests {
                 "a",
                 Symbol {
                     name: "a".to_string(),
-                    scope: SymbolScope::GLOBAL,
+                    scope: SymbolScope::Global,
                     index: 0,
                 },
             );
@@ -728,7 +762,7 @@ mod tests {
                 "b",
                 Symbol {
                     name: "b".to_string(),
-                    scope: SymbolScope::GLOBAL,
+                    scope: SymbolScope::Global,
                     index: 1,
                 },
             );
@@ -756,22 +790,22 @@ mod tests {
         let expected = hash! {
                 "a"=> Symbol {
                 name: "a".to_string(),
-                scope: SymbolScope::GLOBAL,
+                scope: SymbolScope::Global,
                 index: 0
                 },
                 "b"=> Symbol {
                 name: "b".to_string(),
-                scope: SymbolScope::GLOBAL,
+                scope: SymbolScope::Global,
                 index: 1
                 },
                 "c"=> Symbol {
                     name: "c".to_string(),
-                    scope: SymbolScope::LOCAL,
+                    scope: SymbolScope::Local,
                     index: 0
                 },
                 "d"=> Symbol {
                     name: "d".to_string(),
-                    scope: SymbolScope::LOCAL,
+                    scope: SymbolScope::Local,
                     index: 1
                 },
         };
@@ -785,22 +819,22 @@ mod tests {
         let expected = hash! {
                 "a"=> Symbol {
                 name: "a".to_string(),
-                scope: SymbolScope::GLOBAL,
+                scope: SymbolScope::Global,
                 index: 0
                 },
                  "b"=> Symbol {
                 name: "b".to_string(),
-                scope: SymbolScope::GLOBAL,
+                scope: SymbolScope::Global,
                 index: 1
                 },
                 "e"=> Symbol {
                     name: "e".to_string(),
-                    scope: SymbolScope::LOCAL,
+                    scope: SymbolScope::Local,
                     index: 0
                 },
                 "f"=> Symbol {
                     name: "f".to_string(),
-                    scope: SymbolScope::LOCAL,
+                    scope: SymbolScope::Local,
                     index: 1
                 },
         };
