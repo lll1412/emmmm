@@ -88,6 +88,8 @@ op_build!(
         GetLocal(1),
         //内置函数
         GetBuiltin(1),
+        Closure(2, 1),
+        GetFree(1),
         // 赋值操作
         Assign(2),
         // 函数调用
@@ -111,6 +113,7 @@ pub struct Definition {
 pub enum Constant {
     Integer(i64),
     String(String),
+    /// insts, num_locals, num_parameters
     CompiledFunction(Instructions, usize, usize),
 }
 
@@ -123,19 +126,6 @@ impl Constant {
                 Object::CompiledFunction(insts.clone(), *num_locals, *num_parameters)
             }
         }
-    }
-}
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct CompiledFunction {
-    pub insts: Instructions,
-    pub num_locals: usize,
-    pub num_parameters: usize
-}
-
-impl CompiledFunction {
-    pub fn new(insts: Instructions, num_locals: usize, num_parameters: usize) -> Self {
-        Self { insts, num_locals, num_parameters}
     }
 }
 
@@ -172,6 +162,9 @@ pub fn make(op_code: Opcode, operands: Vec<usize>) -> Instructions {
 }
 pub fn _make(op_code: Opcode, index: usize) -> Instructions {
     make(op_code, vec![index])
+}
+pub fn _make_closure(fun_index: usize, free_num: usize) -> Instructions {
+    make(Opcode::Closure, vec![fun_index, free_num])
 }
 pub fn _make_const(index: usize) -> Instructions {
     make(Opcode::Constant, vec![index])

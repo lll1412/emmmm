@@ -7,7 +7,7 @@ mod tests {
     use crate::eval::evaluator;
     use crate::eval::evaluator::{Env, EvalResult};
     use crate::object::environment::Environment;
-    use crate::object::{EvalError, HashKey, Object};
+    use crate::object::{HashKey, Object, RuntimeError};
     use std::cell::RefCell;
     use std::collections::HashMap;
     use std::fmt::{Debug, Display};
@@ -77,11 +77,11 @@ mod tests {
         let inputs = [
             (
                 r#"len(1)"#,
-                EvalError::BuiltinUnSupportedArg("len".to_string(), vec![Object::Integer(1)]),
+                RuntimeError::BuiltinUnSupportedArg("len".to_string(), vec![Object::Integer(1)]),
             ),
             (
                 r#"len("one", "two")"#,
-                EvalError::BuiltinIncorrectArgNum(1, 2),
+                RuntimeError::BuiltinIncorrectArgNum(1, 2),
             ),
         ];
         check_error(&inputs);
@@ -168,11 +168,11 @@ mod tests {
         let inputs = [
             (
                 "foobar",
-                EvalError::IdentifierNotFound("foobar".to_string()),
+                RuntimeError::IdentifierNotFound("foobar".to_string()),
             ),
             (
                 "5+true",
-                EvalError::TypeMismatch(
+                RuntimeError::TypeMismatch(
                     BinaryOperator::Plus,
                     Object::Integer(5),
                     Object::Boolean(true),
@@ -180,7 +180,7 @@ mod tests {
             ),
             (
                 "5-true;5",
-                EvalError::TypeMismatch(
+                RuntimeError::TypeMismatch(
                     BinaryOperator::Minus,
                     Object::Integer(5),
                     Object::Boolean(true),
@@ -188,11 +188,11 @@ mod tests {
             ),
             (
                 "-true;",
-                EvalError::UnknownUnaryOperator(UnaryOperator::Neg, Object::Boolean(true)),
+                RuntimeError::UnknownUnaryOperator(UnaryOperator::Neg, Object::Boolean(true)),
             ),
             (
                 "if(10>1){true+false}",
-                EvalError::UnknownBinaryOperator(
+                RuntimeError::UnknownBinaryOperator(
                     BinaryOperator::Plus,
                     Object::Boolean(true),
                     Object::Boolean(false),
@@ -200,7 +200,7 @@ mod tests {
             ),
             (
                 &read_from_file("test_return_if_error.my"),
-                EvalError::UnknownBinaryOperator(
+                RuntimeError::UnknownBinaryOperator(
                     BinaryOperator::Plus,
                     Object::Boolean(true),
                     Object::Boolean(false),
@@ -304,7 +304,7 @@ mod tests {
         }
     }
 
-    fn check_error(inputs: &[(&str, EvalError)]) {
+    fn check_error(inputs: &[(&str, RuntimeError)]) {
         for (i, (input, expected)) in inputs.iter().enumerate() {
             let env = Rc::new(RefCell::new(Environment::new()));
             let evaluated = eval(input, Rc::clone(&env));

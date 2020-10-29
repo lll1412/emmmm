@@ -3,13 +3,13 @@ use std::collections::HashMap;
 use std::fmt::{Display, Formatter, Result};
 use std::rc::Rc;
 
-use crate::compiler::code::{Instructions, _print_instructions};
+use crate::compiler::code::{_print_instructions, Instructions, Opcode};
 use crate::core::base::ast::{BinaryOperator, BlockStatement, Expression, UnaryOperator};
 use crate::eval::evaluator::EvalResult;
 use crate::object::environment::Environment;
 
-pub mod environment;
 pub mod builtins;
+pub mod environment;
 
 type BuiltinFunction = fn(Vec<Object>) -> EvalResult<Object>;
 
@@ -24,10 +24,42 @@ pub enum Object {
     Function(Vec<String>, BlockStatement, Rc<RefCell<Environment>>),
     CompiledFunction(Instructions, usize, usize),
     Builtin(BuiltinFunction),
+    /// compiled function, free variables
+    Closure(CompiledFunction, Vec<Rc<Object>>),
     Return(Box<Object>),
     Null,
 }
+#[derive(Debug, Clone, PartialEq)]
+pub struct Closure {
+    pub compiled_function: CompiledFunction,
+    pub free_variables: Vec<Rc<Object>>,
+}
 
+impl Closure {
+    pub fn new(compiled_function: CompiledFunction, free_variables: Vec<Rc<Object>>) -> Self {
+        Self {
+            compiled_function,
+            free_variables,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct CompiledFunction {
+    pub insts: Instructions,
+    pub num_locals: usize,
+    pub num_parameters: usize,
+}
+
+impl CompiledFunction {
+    pub fn new(insts: Instructions, num_locals: usize, num_parameters: usize) -> Self {
+        Self {
+            insts,
+            num_locals,
+            num_parameters,
+        }
+    }
+}
 #[derive(PartialEq, Eq, Hash, Clone, Debug)]
 pub enum HashKey {
     Integer(i64),
@@ -41,7 +73,7 @@ impl HashKey {
             Object::String(str) => Ok(HashKey::String(str.to_string())),
             Object::Integer(int) => Ok(HashKey::Integer(*int)),
             Object::Boolean(bool) => Ok(HashKey::Boolean(*bool)),
-            _ => Err(EvalError::UnsupportedHashKey(obj.clone())),
+            _ => Err(RuntimeError::UnsupportedHashKey(obj.clone())),
         }
     }
 }
@@ -57,7 +89,23 @@ impl Display for HashKey {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum EvalError {
+pub enum RuntimeError {
+    StackNoElement,
+    StackOverflow,
+    ArrayOutOfBound { len: usize, index: usize },
+    UnSupportedBinOperation(Opcode, Object, Object),
+    UnSupportedBinOperator(Opcode),
+    ByZero(Object, Object),
+
+    UnSupportedUnOperation(Opcode, Object),
+    UnSupportedIndexOperation(Object, Object),
+    UnKnownOpCode(Opcode),
+
+    CustomErrMsg(String),
+
+    WrongArgumentCount(usize, usize),
+    NotFunction(Object),
+    /*--------------------------*/
     TypeMismatch(BinaryOperator, Object, Object),
     UnknownUnaryOperator(UnaryOperator, Object),
     UnknownBinaryOperator(BinaryOperator, Object, Object),
@@ -76,29 +124,29 @@ pub enum EvalError {
     UnsupportedHashKey(Object),
 }
 
-impl Display for EvalError {
+impl Display for RuntimeError {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
-            EvalError::TypeMismatch(op, l, r) => write!(
+            RuntimeError::TypeMismatch(op, l, r) => write!(
                 f,
                 "type mismatch: {} {} {}",
                 l.type_name(),
                 op,
                 r.type_name()
             ),
-            EvalError::UnknownUnaryOperator(op, ex) => {
+            RuntimeError::UnknownUnaryOperator(op, ex) => {
                 write!(f, "unknown operator: {}{}", op, ex.type_name())
             }
-            EvalError::UnknownBinaryOperator(op, l, r) => write!(
+            RuntimeError::UnknownBinaryOperator(op, l, r) => write!(
                 f,
                 "unknown operator: {} {} {}",
                 l.type_name(),
                 op,
                 r.type_name()
             ),
-            EvalError::IdentifierNotFound(id) => write!(f, "identifier not found: {}", id),
-            EvalError::NotCallable(fun) => write!(f, "not callable fun: {}", fun),
-            EvalError::BuiltinUnSupportedArg(name, args) => write!(
+            RuntimeError::IdentifierNotFound(id) => write!(f, "identifier not found: {}", id),
+            RuntimeError::NotCallable(fun) => write!(f, "not callable fun: {}", fun),
+            RuntimeError::BuiltinUnSupportedArg(name, args) => write!(
                 f,
                 "argument to `{}` not supported, got {}",
                 name,
@@ -107,21 +155,49 @@ impl Display for EvalError {
                     .collect::<Vec<&str>>()
                     .join(", ")
             ),
-            EvalError::BuiltinIncorrectArgNum(expected_num, actual_num) => write!(
+            RuntimeError::BuiltinIncorrectArgNum(expected_num, actual_num) => write!(
                 f,
                 "wrong number of arguments. got {}, want {}",
                 actual_num, expected_num
             ),
-            EvalError::UnsupportedExpression(expr) => write!(f, "unsupported expression: {}", expr),
-            EvalError::IndexUnsupported(left) => write!(f, "index operator not support: {}", left),
-            EvalError::AssignUnsupported(left, val) => write!(
+            RuntimeError::UnsupportedExpression(expr) => {
+                write!(f, "unsupported expression: {}", expr)
+            }
+            RuntimeError::IndexUnsupported(left) => {
+                write!(f, "index operator not support: {}", left)
+            }
+            RuntimeError::AssignUnsupported(left, val) => write!(
                 f,
                 "unsupported assign expression.{} can't assign to {}",
                 val, left
             ),
-            EvalError::UnsupportedHashKey(obj) => {
+            RuntimeError::UnsupportedHashKey(obj) => {
                 write!(f, "can't used as a hash key: {}", obj.type_name())
             }
+            RuntimeError::StackNoElement => write!(f, "stack is empty"),
+            RuntimeError::StackOverflow => write!(f, "stack overflow"),
+            RuntimeError::ArrayOutOfBound { len, index } => {
+                write!(f, "array out of bound. index({}) >= len({})", index, len)
+            }
+            RuntimeError::UnSupportedBinOperation(op, l, r) => {
+                write!(f, "unsupported binary operation: {} {} {}", l, op, r)
+            }
+            RuntimeError::UnSupportedBinOperator(op) => {
+                write!(f, "unsupported binary operator: {}", op)
+            }
+            RuntimeError::ByZero(a, b) => write!(f, "by zero: {} / {}", a, b),
+            RuntimeError::UnSupportedUnOperation(op, operand) => {
+                write!(f, "unsupported unary operation: {} {}", op, operand)
+            }
+            RuntimeError::UnSupportedIndexOperation(arr, index) => {
+                write!(f, "unsupported index operator: {}[{}]", arr, index)
+            }
+            RuntimeError::UnKnownOpCode(op) => write!(f, "unknown opcode: {}", op),
+            RuntimeError::CustomErrMsg(err_msg) => write!(f, "{}", err_msg),
+            RuntimeError::WrongArgumentCount(exp, act) => {
+                write!(f, "wrong argument count: expected: {}, got: {}", exp, act)
+            }
+            RuntimeError::NotFunction(obj) => write!(f, "{} not a function", obj),
         }
     }
 }
@@ -178,6 +254,7 @@ impl Display for Object {
             Object::CompiledFunction(insts, _num_locals, _num_parameters) => {
                 write!(f, "{}", _print_instructions(insts))
             }
+            Object::Closure(cf, _free) => write!(f, "{}", _print_instructions(&cf.insts)),
         }
     }
 }

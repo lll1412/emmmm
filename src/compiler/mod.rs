@@ -99,7 +99,8 @@ impl Compiler {
         Compiler::with_state(sb, c)
     }
     pub fn with_state(symbol_table: RcSymbolTable, constants: Constants) -> Self {
-        for (i, builtin) in BUILTINS.iter().enumerate() {//预编译内置函数
+        for (i, builtin) in BUILTINS.iter().enumerate() {
+            //预编译内置函数
             symbol_table.borrow_mut().define_builtin(i, builtin);
         }
         let main_scope = CompilationScope::new();
@@ -304,14 +305,28 @@ impl Compiler {
                 if !self.last_instruction_is(Opcode::ReturnValue) {
                     self.emit(Opcode::Return, vec![]);
                 }
+
+                let frees = &self
+                    .symbol_table
+                    .borrow()
+                    .free_symbols
+                    .iter()
+                    .map(|s| s.name.clone())
+                    .collect::<Vec<String>>();
+                //自由变量个数
+                let free_count = frees.len();
                 //局部变量个数
                 let num_locals = self.symbol_table_len();
                 //编译后的函数常量
                 let compiled_fn = self.leave_scope();
+                //自由变量
+                for name in frees {
+                    self.load_symbol(name)?;// emit free
+                }
                 let constant = Constant::CompiledFunction(compiled_fn, num_locals, args.len());
                 let const_index = self.add_constant(constant);
                 //函数常量索引
-                self.emit(Opcode::Constant, vec![const_index]);
+                self.emit(Opcode::Closure, vec![const_index, free_count]);
             }
             Expression::Call(fun, args) => {
                 self.compile_expression(fun)?;
@@ -421,7 +436,7 @@ impl Compiler {
     }
     /// 读取符号表元素（生成一条获取该数据的指令）
     fn load_symbol(&mut self, name: &str) -> CompileResult<Symbol> {
-        let option = self.symbol_table.borrow().resolve(name);
+        let option = self.symbol_table.borrow_mut().resolve(name);
         let symbol = match option {
             None => return Err(CompileError::UndefinedIdentifier(name.to_string())),
             Some(symbol) => symbol,
@@ -430,6 +445,7 @@ impl Compiler {
             SymbolScope::Global => Opcode::GetGlobal,
             SymbolScope::Local => Opcode::GetLocal,
             SymbolScope::Builtin => Opcode::GetBuiltin,
+            SymbolScope::Free => Opcode::GetFree,
         };
         self.emit(op, vec![symbol.index]);
         Ok(symbol)
@@ -449,7 +465,7 @@ impl Compiler {
         self.symbol_table.borrow().num_definitions
     }
     fn compile_assign(&mut self, name: &str) -> CompileResult<()> {
-        let option = self.symbol_table.borrow().resolve(name);
+        let option = self.symbol_table.borrow_mut().resolve(name);
         match option {
             None => {
                 return Err(CompileError::UndefinedIdentifier(name.to_string()));

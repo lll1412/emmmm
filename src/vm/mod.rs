@@ -1,18 +1,18 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use crate::compiler::code::{read_usize, Opcode};
 use crate::compiler::{ByteCode, Constants};
-use crate::compiler::code::{CompiledFunction, Opcode};
 use crate::create_rc_ref_cell;
 use crate::object::builtins::BUILTINS;
-use crate::object::Object;
+use crate::object::{Closure, CompiledFunction, Object, RuntimeError};
 use crate::vm::frame::Frame;
 
 mod frame;
 mod r#impl;
 mod test;
 
-pub type VmResult<T = Rc<Object>> = std::result::Result<T, VmError>;
+pub type VmResult<T = Rc<Object>> = std::result::Result<T, RuntimeError>;
 pub type Globals = Rc<RefCell<Vec<Rc<Object>>>>;
 pub type RCFrame = Frame;
 
@@ -55,7 +55,8 @@ impl Vm {
             stack.push(null.clone())
         }
         let main_fn = CompiledFunction::new(byte_code.instructions, 0, 0);
-        let main_frame = Frame::new(main_fn, 0);
+        let main_closure = Closure::new(main_fn, vec![]);
+        let main_frame = Frame::new(main_closure, 0);
         let mut frames = Vec::with_capacity(MAX_FRAMES);
         frames.push(main_frame);
         let mut builtins = vec![];
@@ -131,7 +132,10 @@ impl Vm {
                         if let Object::Integer(val) = *value {
                             self.push_stack(Rc::new(Object::Integer(-val)))?;
                         } else {
-                            return Err(VmError::UnSupportedUnOperation(op_code, (*value).clone()));
+                            return Err(RuntimeError::UnSupportedUnOperation(
+                                op_code,
+                                (*value).clone(),
+                            ));
                         }
                     }
                     Opcode::Not => {
@@ -143,7 +147,7 @@ impl Vm {
                         } else if *value == NULL {
                             self.push_stack(Rc::new(NULL))?;
                         } else {
-                            return Err(VmError::UnSupportedUnOperation(
+                            return Err(RuntimeError::UnSupportedUnOperation(
                                 Opcode::Not,
                                 (*value).clone(),
                             ));
@@ -203,6 +207,38 @@ impl Vm {
                         self.current_frame_ip_inc(n);
                     }
 
+                    Opcode::Closure => {
+                        //读取函数索引
+                        let function_index = read_usize(&ins[ip..], 2);
+                        //读取自由变量个数
+                        let free_num = read_usize(&ins[ip + 2..], 1);
+                        let func_object = self.get_const_object(function_index);
+                        if let Object::CompiledFunction(insts, num_locals, num_parameters) =
+                            func_object
+                        {
+                            let compiled_function =
+                                CompiledFunction::new(insts, num_locals, num_parameters);
+                            let mut frees = vec![];
+                            //往前free_num个都是free_variable
+                            for i in 0..free_num {
+                                let free_object = &self.stack[self.sp - free_num + i];
+                                frees.push(free_object.clone()); //存引用
+                            }
+                            let closure = Object::Closure(compiled_function, frees);
+                            self.push_stack(Rc::new(closure))?;
+                        } else {
+                            return Err(RuntimeError::NotFunction(func_object));
+                        };
+                        self.current_frame_ip_inc(3);
+                    }
+                    Opcode::GetFree => {
+                        let (free_index, n) = self.read_usize(op_code, ip);
+                        self.push_stack(
+                            self.current_frame().closure.free_variables[free_index].clone(),
+                        )?;
+                        self.current_frame_ip_inc(n);
+                    }
+
                     Opcode::Assign => {
                         let (global_index, n) = self.read_usize(op_code, ip);
                         self.execute_assign_operation(global_index)?;
@@ -225,30 +261,10 @@ impl Vm {
                         self.sp = base_pointer - 1;
                         self.push_stack(Rc::new(NULL))?;
                     }
-                    _ => return Err(VmError::UnKnownOpCode(op_code)),
+                    _ => return Err(RuntimeError::UnKnownOpCode(op_code)),
                 }
             }
         }
         self.last_popped_stack_element()
     }
-}
-
-#[derive(Debug, PartialEq)]
-pub enum VmError {
-    StackNoElement,
-    StackOverflow,
-
-    ArrayOutOfBound { len: usize, index: usize },
-
-    UnSupportedBinOperation(Opcode, Object, Object),
-    UnSupportedBinOperator(Opcode),
-    ByZero(Object, Object),
-
-    UnSupportedUnOperation(Opcode, Object),
-    UnSupportedIndexOperation(Object, Object),
-    UnKnownOpCode(Opcode),
-
-    CustomErrMsg(String),
-
-    WrongArgumentCount(usize, usize),
 }

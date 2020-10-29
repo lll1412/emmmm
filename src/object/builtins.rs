@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 
 use crate::eval::evaluator::EvalResult;
-use crate::object::{EvalError, Object};
+use crate::object::{Object, RuntimeError};
 
 macro_rules! builtin {
     ($name:ident) => {
@@ -41,7 +41,7 @@ pub fn len(args: Vec<Object>) -> EvalResult {
     let len = match &args[0] {
         Object::String(str) => str.len(),
         Object::Array(items) => items.borrow().len(),
-        _ => return Err(EvalError::BuiltinUnSupportedArg("len".to_string(), args)),
+        _ => return Err(RuntimeError::BuiltinUnSupportedArg("len".to_string(), args)),
     };
     Ok(Object::Integer(len as i64))
 }
@@ -54,7 +54,12 @@ pub fn first(args: Vec<Object>) -> EvalResult {
             .next()
             .map_or(Object::Null, |c| Object::String(c.to_string())),
         Object::Array(items) => items.borrow().first().unwrap_or(&Object::Null).clone(),
-        _ => return Err(EvalError::BuiltinUnSupportedArg("first".to_string(), args)),
+        _ => {
+            return Err(RuntimeError::BuiltinUnSupportedArg(
+                "first".to_string(),
+                args,
+            ))
+        }
     };
     Ok(first)
 }
@@ -67,7 +72,12 @@ pub fn last(args: Vec<Object>) -> EvalResult {
             .last()
             .map_or(Object::Null, |c| Object::String(c.to_string())),
         Object::Array(items) => items.borrow().last().unwrap_or(&Object::Null).clone(),
-        _ => return Err(EvalError::BuiltinUnSupportedArg("last".to_string(), args)),
+        _ => {
+            return Err(RuntimeError::BuiltinUnSupportedArg(
+                "last".to_string(),
+                args,
+            ))
+        }
     };
     Ok(last)
 }
@@ -80,7 +90,12 @@ pub fn rest(args: Vec<Object>) -> EvalResult {
             let x = items.borrow()[1..].to_vec();
             Object::Array(RefCell::new(x))
         }
-        _ => return Err(EvalError::BuiltinUnSupportedArg("last".to_string(), args)),
+        _ => {
+            return Err(RuntimeError::BuiltinUnSupportedArg(
+                "last".to_string(),
+                args,
+            ))
+        }
     };
     Ok(rest)
 }
@@ -100,7 +115,12 @@ pub fn push(args: Vec<Object>) -> EvalResult {
             }
             Object::String(str)
         }
-        _ => return Err(EvalError::BuiltinUnSupportedArg("push".to_string(), args)),
+        _ => {
+            return Err(RuntimeError::BuiltinUnSupportedArg(
+                "push".to_string(),
+                args,
+            ))
+        }
     };
     Ok(push)
 }
@@ -114,7 +134,7 @@ pub fn print(args: Vec<Object>) -> EvalResult {
 
 fn assert_argument_count(expected: usize, args: &[Object]) -> EvalResult<()> {
     if expected != args.len() {
-        Err(EvalError::BuiltinIncorrectArgNum(expected, args.len()))
+        Err(RuntimeError::BuiltinIncorrectArgNum(expected, args.len()))
     } else {
         Ok(())
     }

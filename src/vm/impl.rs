@@ -2,9 +2,10 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use crate::compiler::code::{CompiledFunction, Opcode, read_operands};
-use crate::object::{HashKey, Object};
-use crate::vm::{FALSE, GLOBALS_SIZE, NULL, RCFrame, STACK_SIZE, TRUE, Vm, VmError, VmResult};
+use crate::compiler::code::{Opcode, read_operands};
+use crate::object;
+use crate::object::{Closure, HashKey, Object, RuntimeError};
+use crate::vm::{FALSE, GLOBALS_SIZE, NULL, RCFrame, STACK_SIZE, TRUE, Vm, VmResult};
 use crate::vm::frame::Frame;
 
 impl Vm {
@@ -19,7 +20,7 @@ impl Vm {
                 if let Object::Integer(i) = index.as_ref() {
                     items.borrow_mut()[*i as usize] = Object::clone(val);
                 } else {
-                    return Err(VmError::UnSupportedIndexOperation(
+                    return Err(RuntimeError::UnSupportedIndexOperation(
                         Object::clone(obj),
                         Object::clone(index),
                     ));
@@ -30,7 +31,7 @@ impl Vm {
                 let val = &self.pop_stack()?;
                 let index = &self.pop_stack()?;
                 let key = HashKey::from_object(index)
-                    .map_err(|err| VmError::CustomErrMsg(err.to_string()))?;
+                    .map_err(|err| RuntimeError::CustomErrMsg(err.to_string()))?;
                 pairs.borrow_mut().insert(key, Object::clone(val));
             }
             //普通赋值
@@ -58,8 +59,8 @@ impl Vm {
         while i < self.sp {
             let k = &self.stack[i];
             let v = &self.stack[i + 1];
-            let key =
-                HashKey::from_object(k).map_err(|err| VmError::CustomErrMsg(err.to_string()))?;
+            let key = HashKey::from_object(k)
+                .map_err(|err| RuntimeError::CustomErrMsg(err.to_string()))?;
             hash.insert(key, Object::clone(v));
             i += 2;
         }
@@ -78,14 +79,14 @@ impl Vm {
                     Opcode::Mul => left_val * right_val,
                     Opcode::Div => {
                         if right_val == &0 {
-                            return Err(VmError::ByZero(
+                            return Err(RuntimeError::ByZero(
                                 Object::clone(&left),
                                 Object::clone(&right),
                             ));
                         }
                         left_val / right_val
                     }
-                    _ => return Err(VmError::UnSupportedBinOperator(op)),
+                    _ => return Err(RuntimeError::UnSupportedBinOperator(op)),
                 };
                 Ok(Rc::new(Object::Integer(r)))
             }
@@ -93,14 +94,14 @@ impl Vm {
                 if let Opcode::Add = op {
                     Ok(Rc::new(Object::String(left_val.clone() + right_val)))
                 } else {
-                    Err(VmError::UnSupportedBinOperation(
+                    Err(RuntimeError::UnSupportedBinOperation(
                         op,
                         left.clone(),
                         right.clone(),
                     ))
                 }
             }
-            _ => Err(VmError::UnSupportedBinOperation(
+            _ => Err(RuntimeError::UnSupportedBinOperation(
                 op,
                 left.clone(),
                 right.clone(),
@@ -116,11 +117,11 @@ impl Vm {
             }
         } else if let Object::Hash(pairs) = obj {
             let key = HashKey::from_object(index)
-                .map_err(|err| VmError::CustomErrMsg(err.to_string()))?;
+                .map_err(|err| RuntimeError::CustomErrMsg(err.to_string()))?;
             let value = pairs.borrow().get(&key).cloned().unwrap_or(NULL);
             return Ok(Rc::new(value));
         }
-        Err(VmError::UnSupportedIndexOperation(
+        Err(RuntimeError::UnSupportedIndexOperation(
             obj.clone(),
             index.clone(),
         ))
@@ -136,7 +137,7 @@ impl Vm {
                     Opcode::LessThan => left < right,
                     Opcode::Equal => left == right,
                     Opcode::NotEqual => left != right,
-                    _ => return Err(VmError::UnSupportedBinOperator(op)),
+                    _ => return Err(RuntimeError::UnSupportedBinOperator(op)),
                 };
                 return Ok(if bool { Rc::new(TRUE) } else { Rc::new(FALSE) });
             }
@@ -157,7 +158,7 @@ impl Vm {
                 }
             }
             _ => {
-                return Err(VmError::UnSupportedBinOperation(
+                return Err(RuntimeError::UnSupportedBinOperation(
                     op,
                     Object::clone(&left),
                     Object::clone(&right),
@@ -170,32 +171,44 @@ impl Vm {
     pub fn call_function(&mut self, arg_nums: usize) -> VmResult<()> {
         self.sp -= arg_nums;
         let cf = &*self.stack[self.sp - 1]; //往回跳过参数个数位置, 当前位置是函数
-        if let Object::CompiledFunction(insts, num_locals, num_parameters) = cf {
-            if arg_nums != *num_parameters {
-                return Err(VmError::WrongArgumentCount(*num_parameters, arg_nums));
+        match cf {
+            Object::Closure(
+                object::CompiledFunction {
+                    insts,
+                    num_locals,
+                    num_parameters,
+                },
+                free_variables,
+            ) => {
+                if arg_nums != *num_parameters {
+                    return Err(RuntimeError::WrongArgumentCount(*num_parameters, arg_nums));
+                }
+                let compiled_function =
+                    object::CompiledFunction::new(insts.clone(), *num_locals, arg_nums);
+                let closure = Closure::new(compiled_function, free_variables.clone());
+                let frame = Frame::new(closure, self.sp);
+                //Equivalent to
+                self.sp += num_locals;
+                // self.sp = frame.base_pointer + num_locals;
+                self.push_frame(frame); //进入函数内部（下一帧）
             }
-            let frame = Frame::new(
-                CompiledFunction::new(insts.clone(), *num_locals, arg_nums),
-                self.sp,
-            );
-            //Equivalent to
-            self.sp += num_locals;
-            // self.sp = frame.base_pointer + num_locals;
-            self.push_frame(frame); //进入函数内部（下一帧）
-            Ok(())
-        } else if let Object::Builtin(builtin_fun) = cf {
-            //内置函数
-            let mut v = vec![];
-            for i in 0..arg_nums {
-                let rc = &self.stack[self.sp + i];
-                v.push(Object::clone(rc));
+            Object::Builtin(builtin_fun) => {
+                //内置函数
+                let mut v = vec![];
+                for i in 0..arg_nums {
+                    let rc = &self.stack[self.sp + i];
+                    v.push(Object::clone(rc));
+                }
+                let r = builtin_fun(v).map_err(|e| RuntimeError::CustomErrMsg(e.to_string()))?;
+                self.push_stack(Rc::new(r))?;
             }
-            let r = builtin_fun(v).map_err(|e| VmError::CustomErrMsg(e.to_string()))?;
-            self.push_stack(Rc::new(r))?;
-            Ok(())
-        } else {
-            Err(VmError::CustomErrMsg("calling non-function".to_string()))
+            _ => {
+                return Err(RuntimeError::CustomErrMsg(
+                    "calling non-function".to_string(),
+                ))
+            }
         }
+        Ok(())
     }
 
     /// # 计算该指令操作数的长度，方便指令指针自增
@@ -213,7 +226,7 @@ impl Vm {
     /// # 压入栈中
     pub fn push_stack(&mut self, object: Rc<Object>) -> VmResult<()> {
         if self.sp == STACK_SIZE {
-            Err(VmError::StackOverflow)
+            Err(RuntimeError::StackOverflow)
         } else {
             if self.sp >= self.stack.len() {
                 self.stack.push(object);
@@ -227,7 +240,7 @@ impl Vm {
     /// # 弹出栈顶元素
     pub fn pop_stack(&mut self) -> VmResult {
         if self.sp == 0 {
-            Err(VmError::StackNoElement)
+            Err(RuntimeError::StackNoElement)
         } else {
             let o = &self.stack[self.sp - 1];
             self.sp -= 1;
@@ -238,7 +251,7 @@ impl Vm {
     /// # 存入全局变量
     pub fn set_global(&mut self, global_index: usize, global: Rc<Object>) -> VmResult<()> {
         if global_index == GLOBALS_SIZE {
-            Err(VmError::StackOverflow)
+            Err(RuntimeError::StackOverflow)
         } else {
             if global_index == self.globals.borrow().len() {
                 self.globals.borrow_mut().push(global);
@@ -255,7 +268,7 @@ impl Vm {
         if let Some(object) = option {
             Ok(object.clone())
         } else {
-            Err(VmError::CustomErrMsg(format!(
+            Err(RuntimeError::CustomErrMsg(format!(
                 "global has not such element. index: {}",
                 global_index
             )))
@@ -266,7 +279,7 @@ impl Vm {
         if let Some(builtin_fun) = option {
             Ok(builtin_fun.clone())
         } else {
-            Err(VmError::CustomErrMsg(format!(
+            Err(RuntimeError::CustomErrMsg(format!(
                 "builtin has not such element. index: {}",
                 builtin_index
             )))
@@ -275,7 +288,7 @@ impl Vm {
     /// # 最后弹出栈顶的元素
     pub fn last_popped_stack_element(&self) -> VmResult {
         if self.sp >= self.stack.len() {
-            Err(VmError::ArrayOutOfBound {
+            Err(RuntimeError::ArrayOutOfBound {
                 len: self.stack.len(),
                 index: self.sp,
             })

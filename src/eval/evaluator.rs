@@ -4,13 +4,13 @@ use crate::core::base::ast::{
 use crate::object::builtins::lookup;
 use crate::object::environment::Environment;
 use crate::object::Object::Boolean;
-use crate::object::{EvalError, HashKey, Object};
+use crate::object::{HashKey, Object, RuntimeError};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::rc::Rc;
 
-pub type EvalResult<T = Object> = Result<T, EvalError>;
+pub type EvalResult<T = Object> = Result<T, RuntimeError>;
 pub type Env = Rc<RefCell<Environment>>;
 
 /// # 程序求值
@@ -100,7 +100,7 @@ fn eval_expression(expr: &Expression, env: Env) -> EvalResult {
             eval_array_index(Rc::clone(&env), arr_expr, idx_expr)
         }
         Expression::HashLiteral(pairs) => eval_hash_expression(Rc::clone(&env), pairs),
-        _ => Err(EvalError::UnsupportedExpression(expr.clone())),
+        _ => Err(RuntimeError::UnsupportedExpression(expr.clone())),
     }
 }
 /// ## map表达式求值
@@ -132,7 +132,7 @@ fn eval_index_expression(obj: &Object, idx: &Object) -> EvalResult {
                 let r = &items.borrow()[i];
                 Ok(r.clone())
             } else {
-                Err(EvalError::IndexUnsupported(obj.clone()))
+                Err(RuntimeError::IndexUnsupported(obj.clone()))
             }
         }
         Object::Hash(pairs) => {
@@ -141,7 +141,7 @@ fn eval_index_expression(obj: &Object, idx: &Object) -> EvalResult {
             let r = pairs.get(key).unwrap_or(&Object::Null);
             Ok(r.clone())
         }
-        _ => Err(EvalError::IndexUnsupported(obj.clone())),
+        _ => Err(RuntimeError::IndexUnsupported(obj.clone())),
     }
 }
 
@@ -182,7 +182,7 @@ fn apply_function(fun: Object, param_values: Vec<Object>) -> EvalResult {
             }
         }
         Object::Builtin(builtin_fun) => builtin_fun(param_values),
-        _ => Err(EvalError::NotCallable(fun)),
+        _ => Err(RuntimeError::NotCallable(fun)),
     }
 }
 
@@ -198,7 +198,7 @@ fn eval_identifier_expression(env: Env, id: &str) -> EvalResult {
         return Ok(builtin);
     }
     //否则报错
-    Err(EvalError::IdentifierNotFound(id.to_string()))
+    Err(RuntimeError::IdentifierNotFound(id.to_string()))
 }
 
 /// ## 函数调用表达式求值
@@ -206,7 +206,7 @@ fn eval_call_expression(
     env: Env,
     fun: &Expression,
     params: &[Expression],
-) -> Result<Object, EvalError> {
+) -> Result<Object, RuntimeError> {
     let fun = eval_expression(&fun, Rc::clone(&env))?;
     let args = eval_expressions(params, Rc::clone(&env))?;
     apply_function(fun, args)
@@ -226,7 +226,7 @@ fn eval_binary_expression(
                 env.borrow_mut().set(&id, new_val.clone());
                 Ok(new_val)
             } else {
-                Err(EvalError::IdentifierNotFound(id.clone()))
+                Err(RuntimeError::IdentifierNotFound(id.clone()))
             }
         }
         //数组/hash索引赋值
@@ -265,7 +265,7 @@ fn eval_binary_expression(
                     }
                 }
             }
-            Err(EvalError::AssignUnsupported(left.clone(), right.clone()))
+            Err(RuntimeError::AssignUnsupported(left.clone(), right.clone()))
         }
         //普通二元运算
         _ => {
@@ -287,7 +287,7 @@ fn eval_binary_expression(
                     return eval_string_binary_expression(operator, left, right);
                 }
             }
-            Err(EvalError::TypeMismatch(operator.clone(), left, right))
+            Err(RuntimeError::TypeMismatch(operator.clone(), left, right))
         }
     }
 }
@@ -301,7 +301,7 @@ fn eval_string_binary_expression(operator: &BinaryOperator, left: &str, right: &
         }
         BinaryOperator::Eq => Ok(Object::Boolean(left == right)),
         BinaryOperator::NotEq => Ok(Object::Boolean(left != right)),
-        _ => Err(EvalError::UnknownBinaryOperator(
+        _ => Err(RuntimeError::UnknownBinaryOperator(
             operator.clone(),
             Object::String(left.to_string()),
             Object::String(right.to_string()),
@@ -322,7 +322,7 @@ fn eval_integer_binary_expression(operator: &BinaryOperator, left: i64, right: i
         BinaryOperator::Le => Ok(Object::Boolean(left <= right)),
         BinaryOperator::Eq => Ok(Object::Boolean(left == right)),
         BinaryOperator::NotEq => Ok(Object::Boolean(left != right)),
-        _ => Err(EvalError::UnknownBinaryOperator(
+        _ => Err(RuntimeError::UnknownBinaryOperator(
             operator.clone(),
             Object::Integer(left),
             Object::Integer(right),
@@ -343,7 +343,7 @@ fn eval_boolean_binary_expression(
         BinaryOperator::Le => Ok(Object::Boolean(left <= right)),
         BinaryOperator::Eq => Ok(Object::Boolean(left == right)),
         BinaryOperator::NotEq => Ok(Object::Boolean(left != right)),
-        _ => Err(EvalError::UnknownBinaryOperator(
+        _ => Err(RuntimeError::UnknownBinaryOperator(
             operator.clone(),
             Boolean(left),
             Boolean(right),
@@ -380,6 +380,9 @@ fn eval_not_operator_expression(operand: Object) -> EvalResult {
 fn eval_neg_operator_expression(operand: Object) -> EvalResult {
     match operand {
         Object::Integer(i) => Ok(Object::Integer(-i)),
-        _ => Err(EvalError::UnknownUnaryOperator(UnaryOperator::Neg, operand)),
+        _ => Err(RuntimeError::UnknownUnaryOperator(
+            UnaryOperator::Neg,
+            operand,
+        )),
     }
 }

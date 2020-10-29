@@ -4,7 +4,8 @@ mod tests {
 
     use crate::compiler::{Compiler, Instructions};
     use crate::compiler::code::{
-        self, _make, _make_const, _make_noop, _print_instructions, Constant, make, Opcode,
+        self, _make, _make_closure, _make_const, _make_noop, _print_instructions, Constant, make,
+        Opcode,
     };
     use crate::compiler::symbol_table::{Symbol, SymbolScope, SymbolTable};
     use crate::core::base::ast::Program;
@@ -24,6 +25,162 @@ mod tests {
             map
             }
         };
+    }
+    #[test]
+    fn closures() {
+        let tests = vec![
+            (
+                r"
+            fn(a) {
+                fn(b) {
+                    a + b
+                }
+            }
+            ",
+                vec![
+                    Constant::CompiledFunction(
+                        vec![
+                            _make(Opcode::GetFree, 0),
+                            _make(Opcode::GetLocal, 0),
+                            _make_noop(Opcode::Add),
+                            _make_noop(Opcode::ReturnValue),
+                        ]
+                        .concat(),
+                        1,
+                        1,
+                    ),
+                    Constant::CompiledFunction(
+                        vec![
+                            _make(Opcode::GetLocal, 0),
+                            _make_closure(0, 1),
+                            _make_noop(Opcode::ReturnValue),
+                        ]
+                        .concat(),
+                        1,
+                        1,
+                    ),
+                ],
+                vec![_make_closure(1, 0), _make_noop(Opcode::Pop)],
+            ),
+            (
+                r"
+            fn(a) {
+                fn(b) {
+                    fn(c) {
+                        a + b + c
+                    }
+                }
+            }
+            ",
+                vec![
+                    Constant::CompiledFunction(
+                        vec![
+                            _make(Opcode::GetFree, 0),
+                            _make(Opcode::GetFree, 1),
+                            _make_noop(Opcode::Add),
+                            _make(Opcode::GetLocal, 0),
+                            _make_noop(Opcode::Add),
+                            _make_noop(Opcode::ReturnValue),
+                        ]
+                        .concat(),
+                        1,
+                        1,
+                    ),
+                    Constant::CompiledFunction(
+                        vec![
+                            _make(Opcode::GetFree, 0),
+                            _make(Opcode::GetLocal, 0),
+                            _make_closure(0, 2),
+                            _make_noop(Opcode::ReturnValue),
+                        ]
+                        .concat(),
+                        1,
+                        1,
+                    ),
+                    Constant::CompiledFunction(
+                        vec![
+                            _make(Opcode::GetLocal, 0),
+                            _make_closure(1, 1),
+                            _make_noop(Opcode::ReturnValue),
+                        ]
+                        .concat(),
+                        1,
+                        1,
+                    ),
+                ],
+                vec![_make_closure(2, 0), _make_noop(Opcode::Pop)],
+            ),
+            (
+                r"
+            let global = 55
+            fn() {
+                let a = 66
+                fn() {
+                    let b = 77
+                    fn() {
+                        let c = 88
+                        global + a + b + c
+                    }
+                }
+            }
+            ",
+                vec![
+                    Constant::Integer(55),
+                    Constant::Integer(66),
+                    Constant::Integer(77),
+                    Constant::Integer(88),
+                    Constant::CompiledFunction(
+                        vec![
+                            _make_const(3),
+                            _make(Opcode::SetLocal, 0),  // declare c
+                            _make(Opcode::GetGlobal, 0), // global
+                            _make(Opcode::GetFree, 0),   // free a
+                            _make_noop(Opcode::Add),
+                            _make(Opcode::GetFree, 1), // free b
+                            _make_noop(Opcode::Add),
+                            _make(Opcode::GetLocal, 0), // local c
+                            _make_noop(Opcode::Add),
+                            _make_noop(Opcode::ReturnValue),
+                        ]
+                        .concat(),
+                        1,
+                        0,
+                    ),
+                    Constant::CompiledFunction(
+                        vec![
+                            _make_const(2),
+                            _make(Opcode::SetLocal, 0), // declare b
+                            _make(Opcode::GetFree, 0), // free a
+                            _make(Opcode::GetLocal, 0),
+                            _make_closure(4, 2),       // closure
+                            _make_noop(Opcode::ReturnValue),
+                        ]
+                        .concat(),
+                        1,
+                        0,
+                    ),
+                    Constant::CompiledFunction(
+                        vec![
+                            _make_const(1),
+                            _make(Opcode::SetLocal, 0), // declare a
+                            _make(Opcode::GetLocal, 0),
+                            _make_closure(5, 1),
+                            _make_noop(Opcode::ReturnValue),
+                        ]
+                        .concat(),
+                        1,
+                        0,
+                    ),
+                ],
+                vec![
+                    _make_const(0),
+                    _make(Opcode::SetGlobal, 0),
+                    _make_closure(6, 0),
+                    _make_noop(Opcode::Pop),
+                ],
+            ),
+        ];
+        run_compile_test(tests);
     }
     #[test]
     fn builtins() {
@@ -65,7 +222,7 @@ mod tests {
                 vec![
                     _make_const(0),
                     _make(Opcode::SetGlobal, 0),
-                    _make_const(1),
+                    _make_closure(1, 0),
                     _make_noop(Opcode::Pop),
                 ],
             ),
@@ -90,7 +247,7 @@ mod tests {
                         0,
                     ),
                 ],
-                vec![_make_const(1), _make_noop(Opcode::Pop)],
+                vec![_make_closure(1, 0), _make_noop(Opcode::Pop)],
             ),
             (
                 r"
@@ -119,7 +276,7 @@ mod tests {
                         0,
                     ),
                 ],
-                vec![_make_const(2), _make_noop(Opcode::Pop)],
+                vec![_make_closure(2, 0), _make_noop(Opcode::Pop)],
             ),
         ];
         run_compile_test(tests);
@@ -184,9 +341,9 @@ mod tests {
                 vec![
                     _make_const(0),
                     _make(Opcode::SetGlobal, 0),
-                    _make_const(1),
+                    _make_closure(1, 0),
                     _make(Opcode::SetGlobal, 1),
-                    _make_const(6),
+                    _make_closure(6, 0),
                     _make(Opcode::SetGlobal, 2),
                     _make(Opcode::GetGlobal, 2),
                     _make(Opcode::Call, 0),
@@ -217,7 +374,7 @@ mod tests {
                     _make(Opcode::SetGlobal, 0),
                     _make_const(1),
                     _make(Opcode::SetGlobal, 1),
-                    _make_const(2),
+                    _make_closure(2, 0),
                     _make(Opcode::SetGlobal, 2),
                     _make(Opcode::GetGlobal, 2),
                     _make_const(3),
@@ -255,7 +412,7 @@ mod tests {
                 vec![
                     _make_const(0),
                     _make(Opcode::SetGlobal, 0),
-                    _make_const(1),
+                    _make_closure(1, 0),
                     _make(Opcode::SetGlobal, 1),
                     _make(Opcode::GetGlobal, 1),
                     _make_const(2),
@@ -292,7 +449,7 @@ mod tests {
                     ),
                 ],
                 vec![
-                    _make_const(2),
+                    _make_closure(2, 0),
                     _make(Opcode::Call, 0),
                     _make_noop(Opcode::Pop),
                 ],
@@ -307,7 +464,7 @@ mod tests {
                     Constant::Integer(233),
                 ],
                 vec![
-                    _make_const(0),
+                    _make_closure(0, 0),
                     _make(Opcode::SetGlobal, 0),
                     _make(Opcode::GetGlobal, 0),
                     _make_const(1),
@@ -336,7 +493,7 @@ mod tests {
                     ),
                 ],
                 vec![
-                    _make_const(2),
+                    _make_closure(2, 0),
                     make(Opcode::SetGlobal, vec![0]),
                     make(Opcode::GetGlobal, vec![0]),
                     _make(Opcode::Call, 0),
@@ -365,10 +522,10 @@ mod tests {
                 ],
                 vec![
                     // let one = fn1
-                    _make_const(1),
+                    _make_closure(1, 0),
                     make(Opcode::SetGlobal, vec![0]),
                     // let two = fn2
-                    _make_const(3),
+                    _make_closure(3, 0),
                     make(Opcode::SetGlobal, vec![1]),
                     // one()
                     make(Opcode::GetGlobal, vec![0]),
@@ -405,7 +562,7 @@ mod tests {
                         0,
                     ),
                 ],
-                vec![_make_const(2), _make_noop(Opcode::Pop)],
+                vec![_make_closure(2, 0), _make_noop(Opcode::Pop)],
             ),
             (
                 r#"fn() { 5 + 10 }"#,
@@ -424,16 +581,26 @@ mod tests {
                         0,
                     ),
                 ],
-                vec![_make_const(2), _make_noop(Opcode::Pop)],
+                vec![_make_closure(2, 0), _make_noop(Opcode::Pop)],
             ),
             (
-                r#"fn() { }"#,
-                vec![Constant::CompiledFunction(
-                    vec![_make_noop(Opcode::Return)].concat(),
-                    0,
-                    0,
-                )],
-                vec![_make_const(0), _make_noop(Opcode::Pop)],
+                r#"fn() { 1; 2}"#,
+                vec![
+                    Constant::Integer(1),
+                    Constant::Integer(2),
+                    Constant::CompiledFunction(
+                        vec![
+                            _make_const(0),
+                            _make_noop(Opcode::Pop),
+                            _make_const(1),
+                            _make_noop(Opcode::ReturnValue),
+                        ]
+                        .concat(),
+                        0,
+                        0,
+                    ),
+                ],
+                vec![_make_closure(2, 0), _make_noop(Opcode::Pop)],
             ),
         ];
         run_compile_test(tests);
@@ -811,7 +978,7 @@ mod tests {
         };
         for (k, v) in expected {
             let x = first
-                .borrow()
+                .borrow_mut()
                 .resolve(k)
                 .expect(&format!("name {} not resolvable", k));
             assert_eq!(x, v.clone());
@@ -840,7 +1007,7 @@ mod tests {
         };
         for (k, v) in expected {
             let x = second
-                .borrow()
+                .borrow_mut()
                 .resolve(k)
                 .expect(&format!("name {} not resolvable", k));
             assert_eq!(x, v.clone());
@@ -1031,18 +1198,19 @@ mod tests {
 
     #[test]
     fn test_instruction_string() {
-        let tests = vec![(
-            vec![
-                code::make(Opcode::Constant, vec![1]),
-                code::make(Opcode::Constant, vec![2]),
-                code::make(Opcode::Constant, vec![65534]),
-                code::make(Opcode::Add, vec![]),
-                code::make(Opcode::Pop, vec![]),
-                code::make(Opcode::SetLocal, vec![0]),
-                code::make(Opcode::GetLocal, vec![0]),
-            ]
-            .concat(),
-            r"0000 OpConstant(0) 01
+        let tests = vec![
+            (
+                vec![
+                    _make_const(1),
+                    _make_const(2),
+                    _make_const(65534),
+                    _make_noop(Opcode::Add),
+                    _make_noop(Opcode::Pop),
+                    _make(Opcode::SetLocal, 0),
+                    _make(Opcode::GetLocal, 0),
+                ]
+                .concat(),
+                r"0000 OpConstant(0) 01
 0003 OpConstant(0) 02
 0006 OpConstant(0) FFFE
 0009 OpAdd(5)
@@ -1050,7 +1218,22 @@ mod tests {
 0011 OpSetLocal(21) 00
 0013 OpGetLocal(22) 00
 ",
-        )];
+            ),
+            (
+                vec![
+                    _make_noop(Opcode::Add),
+                    _make(Opcode::GetLocal, 0),
+                    _make_const(0),
+                    _make_closure(65535, 255),
+                ]
+                .concat(),
+                r"0000 OpAdd(5)
+0001 OpGetLocal(22) 00
+0003 OpConstant(0) 00
+0006 OpClosure(24) FFFF FF
+",
+            ),
+        ];
         for (actual, expected) in tests {
             assert_eq!(code::_print_instructions(&actual), expected);
         }
@@ -1084,6 +1267,28 @@ mod tests {
         run_compile_test(tests);
     }
 
+    #[test]
+    fn test_make() {
+        let tests = vec![
+            (
+                Opcode::Constant,
+                vec![0xFFFE],
+                vec![Opcode::Constant as u8, 0xFF, 0xFE],
+            ),
+            (
+                Opcode::Closure,
+                vec![65534, 255],
+                vec![Opcode::Closure as u8, 0xFF, 0xFE, 0xFF],
+            ),
+            (Opcode::SetLocal, vec![0], vec![Opcode::SetLocal as u8, 0]),
+            (Opcode::Add, vec![], vec![Opcode::Add as u8]),
+        ];
+        for (op, operands, expected) in tests.into_iter() {
+            let instructions = code::make(op, operands);
+            assert_eq!(instructions, expected)
+        }
+    }
+
     fn run_compile_test(tests: Vec<(&str, Vec<Constant>, Vec<Instructions>)>) {
         for (input, expected_constants, expected_instructions) in tests {
             let program = Program::_new(input);
@@ -1110,23 +1315,6 @@ mod tests {
                 }
                 Err(err) => panic!("input: {}, \nerror:{:?}", input, err),
             }
-        }
-    }
-
-    #[test]
-    fn test_make() {
-        let tests = vec![
-            (
-                Opcode::Constant,
-                vec![0xFFFE],
-                vec![Opcode::Constant as u8, 0xFF, 0xFE],
-            ),
-            (Opcode::SetLocal, vec![0], vec![Opcode::SetLocal as u8, 0]),
-            (Opcode::Add, vec![], vec![Opcode::Add as u8]),
-        ];
-        for (op, operands, expected) in tests.into_iter() {
-            let instructions = code::make(op, operands);
-            assert_eq!(instructions, expected)
         }
     }
 }

@@ -5,8 +5,8 @@ mod tests {
 
     use crate::compiler::Compiler;
     use crate::core::base::ast::Program;
-    use crate::object::{HashKey, Object};
-    use crate::vm::{Vm, VmError};
+    use crate::object::{HashKey, Object, RuntimeError};
+    use crate::vm::Vm;
 
     macro_rules! hash {
         {} => {
@@ -23,20 +23,80 @@ mod tests {
             }
         };
     }
-
+    #[test]
+    fn closures() {
+        let tests = vec![
+            (
+                r"
+               let newAdder = fn(a) {
+                 let adder = fn(b) { a + b};
+                 return adder;
+               };
+               let addTwo = newAdder(2);
+               addTwo(3);
+        ",
+                Object::Integer(5),
+            ),
+            (
+                r"
+            let newClosure = fn(a) {
+                fn() { a }
+            }
+            let closure = newClosure(99)
+            closure()
+            ",
+                Object::Integer(99),
+            ),
+            (
+                r"
+                let newAdderOuter = fn(a, b) {
+                    let c = a + b
+                    fn(d) {
+                        let e = d + c
+                        fn(f) {
+                            e + f
+                        }
+                    }
+                }
+                let newAddInner = newAdderOuter(1, 2)
+                let adder = newAddInner(3)
+                adder(8)
+            ",
+                Object::Integer(14),
+            ),
+            (
+                r"
+                let a = 1
+                let newAdderOuter = fn(b) {
+                    fn(c) {
+                        fn(d) {
+                            a + b + c + d
+                        }
+                    }
+                }
+                let newAdderInner = newAdderOuter(2)
+                let adder = newAdderInner(3)
+                adder(8)
+                ",
+                Object::Integer(14),
+            ),
+        ];
+        run_vm_test(tests);
+    }
     #[test]
     fn builtin_function() {
         let tests = vec![
-            ("len([1,2,3])", Object::Integer(3))
+            ("len([1,2,3])", Object::Integer(3)),
+            (r#"len("hello")"#, Object::Integer(5)),
         ];
         run_vm_test(tests);
     }
     #[test]
     fn call_with_wrong_arguments() {
         let tests = vec![
-            ("fn() {1;}(1)", VmError::WrongArgumentCount(0, 1)),
-            ("fn(a) {a;}()", VmError::WrongArgumentCount(1, 0)),
-            ("fn(a, b) {a;}(2)", VmError::WrongArgumentCount(2, 1)),
+            ("fn() {1;}(1)", RuntimeError::WrongArgumentCount(0, 1)),
+            ("fn(a) {a;}()", RuntimeError::WrongArgumentCount(1, 0)),
+            ("fn(a, b) {a;}(2)", RuntimeError::WrongArgumentCount(2, 1)),
         ];
         run_vm_test_error(tests);
     }
@@ -378,7 +438,7 @@ mod tests {
         }
     }
 
-    fn run_vm_test_error(tests: Vec<(&str, VmError)>) {
+    fn run_vm_test_error(tests: Vec<(&str, RuntimeError)>) {
         for (input, expected) in tests {
             let program = Program::_new(input);
             let mut compiler = Compiler::_new();
