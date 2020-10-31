@@ -24,6 +24,62 @@ mod tests {
         };
     }
     #[test]
+    fn recursive_fibonacci() {
+        let inputs = vec![(
+            r"
+            let fibonacci = fn(n) {
+                if n < 2 {
+                    n
+                } else {
+                    fibonacci(n - 1) + fibonacci(n - 2)
+                }
+            }
+            fibonacci(19)
+            ",
+            Object::Integer(4181),
+        )];
+        run_vm_test(inputs);
+    }
+    #[test]
+    fn recursive_function() {
+        let inputs = vec![
+            (
+                r"
+            let countDown = fn(x) {
+                if x == 0 {
+                    x
+                } else {
+                    countDown(x - 1)
+                }
+            }
+            let wrapper = fn() {
+                countDown(1)
+            }
+            wrapper()
+        ",
+                Object::Integer(0),
+            ),
+            (
+                r"
+                let wrapper = fn() {
+                    let countDown = fn(x) {
+                        if x == 0 {
+                            x
+                        } else {
+                            countDown(x - 1)
+                        }
+                    }
+                    countDown(1)
+                }
+                wrapper()
+            ",
+                Object::Integer(0),
+            ),
+        ];
+
+        run_vm_test(inputs);
+    }
+    #[test]
     fn closures() {
         let tests = vec![
             (
@@ -420,7 +476,6 @@ mod tests {
 
     fn run_vm_test(tests: Vec<(&str, Object)>) {
         for (input, expected) in tests {
-            println!("start:\n{}", input);
             let program = Program::_new(input);
             let mut compiler = Compiler::_new();
             match compiler.compile(program) {
@@ -430,10 +485,10 @@ mod tests {
                         Ok(object) => {
                             test_expected_object(input, &object, &expected);
                         }
-                        Err(e) => panic!("Input: {}\nVm Error: {:?}", input, e),
+                        Err(e) => panic!("Input: {}\nRuntime Error: {:?}", input, e),
                     };
                 }
-                Err(e) => panic!("Input: {}\nCompiler Error: {:?}", input, e),
+                Err(e) => panic!("Input: {}\nCompile Error: {:?}", input, e),
             }
         }
     }
