@@ -43,7 +43,7 @@ pub struct Vm {
 }
 
 impl Vm {
-    pub fn _new(byte_code: ByteCode) -> Self {
+    pub fn new(byte_code: ByteCode) -> Self {
         let globals = create_rc_ref_cell(Vec::with_capacity(GLOBALS_SIZE));
         Vm::with_global_store(byte_code, globals)
     }

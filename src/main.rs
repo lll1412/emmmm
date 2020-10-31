@@ -1,15 +1,10 @@
 use alian::benchmark::benchmark;
-use alian::repl;
-use std::env;
+use alian::{current_mode, repl, Mode, eval_or_compile};
 
 fn main() {
-    let option_mode = env::args().nth(1);
-    if let Some(mode) = option_mode {
-        if mode == "benchmark" {
-            benchmark();
-            return;
-        }
+    let engine = eval_or_compile();
+    match current_mode() {
+        Mode::Benchmark => benchmark(engine),
+        Mode::Run => repl::start(engine),
     }
-    println!("Welcome to the 👽 programming language!\n");
-    repl::start();
 }

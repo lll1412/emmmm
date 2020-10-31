@@ -93,7 +93,7 @@ impl EmittedInstruction {
 }
 
 impl Compiler {
-    pub fn _new() -> Self {
+    pub fn new() -> Self {
         let sb = Rc::new(RefCell::new(SymbolTable::new()));
         let c = Constants::new(RefCell::new(vec![]));
         Compiler::with_state(sb, c)
@@ -112,7 +112,7 @@ impl Compiler {
         }
     }
     /// 编译为字节码
-    pub fn compile(&mut self, program: Program) -> CompileResult<ByteCode> {
+    pub fn compile(&mut self, program: &Program) -> CompileResult<ByteCode> {
         for statement in &program.statements {
             self.compile_statement(statement)?;
         }

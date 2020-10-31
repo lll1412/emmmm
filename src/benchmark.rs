@@ -2,29 +2,45 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::Instant;
 
+use crate::compiler::Compiler;
 use crate::core::parser::Parser;
+use crate::Engine;
 use crate::eval::evaluator;
-use crate::object::environment;
+use crate::object::{environment, Object};
+use crate::vm::Vm;
 
-pub fn benchmark() {
-    let n = 30;
+pub fn benchmark(engine: Engine) {
+    println!("Welcome to the 👽 programming language in {}", engine);
+    let n = 19;
     let code = &format!(
-        "let fibonacci = fn(x) {{
+        r"let fibonacci = fn(x) {{
              if x < 2 {{
-                 return x
+                 x
              }} else {{
-                 return fibonacci(x - 1) + fibonacci(x - 2)
+                 fibonacci(x - 1) + fibonacci(x - 2)
              }}
          }};
          fibonacci({});",
         n
     );
-    let env = Rc::new(RefCell::new(environment::Environment::new()));
+
     let mut parser = Parser::from(code);
     let program = parser.parse_program();
-    // let errors = parser.errors();
-    let start = Instant::now();
-    let result = evaluator::eval(&program, env).unwrap();
+    let start;
+    let result = match engine {
+        Engine::Eval => {
+            let env = Rc::new(RefCell::new(environment::Environment::new()));
+            start = Instant::now();
+            evaluator::eval(&program, env).expect("eval error")
+        }
+        Engine::Compile => {
+            let mut compiler = Compiler::new();
+            let byte_code = compiler.compile(&program).expect("compile error");
+            start = Instant::now();
+            let result = Vm::new(byte_code).run().expect("runtime error");
+            Object::clone(&result)
+        }
+    };
     let duration = start.elapsed();
     println!(
         "{} s {} ms, No.{}, result: {}",

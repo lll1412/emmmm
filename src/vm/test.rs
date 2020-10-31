@@ -477,10 +477,10 @@ mod tests {
     fn run_vm_test(tests: Vec<(&str, Object)>) {
         for (input, expected) in tests {
             let program = Program::_new(input);
-            let mut compiler = Compiler::_new();
-            match compiler.compile(program) {
+            let mut compiler = Compiler::new();
+            match compiler.compile(&program) {
                 Ok(byte_code) => {
-                    let mut vm = Vm::_new(byte_code);
+                    let mut vm = Vm::new(byte_code);
                     match vm.run() {
                         Ok(object) => {
                             test_expected_object(input, &object, &expected);
@@ -496,10 +496,10 @@ mod tests {
     fn run_vm_test_error(tests: Vec<(&str, RuntimeError)>) {
         for (input, expected) in tests {
             let program = Program::_new(input);
-            let mut compiler = Compiler::_new();
-            match compiler.compile(program) {
+            let mut compiler = Compiler::new();
+            match compiler.compile(&program) {
                 Ok(byte_code) => {
-                    let mut vm = Vm::_new(byte_code);
+                    let mut vm = Vm::new(byte_code);
                     if let Err(err) = vm.run() {
                         assert_eq!(err, expected, "error input:\n{}", input);
                     }
