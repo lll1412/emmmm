@@ -1,7 +1,8 @@
-use crate::core::base::token::*;
-use crate::core::lexer::{is_digit, is_letter, Lexer};
 use std::iter::Peekable;
 use std::str::Chars;
+
+use crate::core::base::token::*;
+use crate::core::lexer::{is_digit, is_letter, Lexer};
 
 impl Lexer {
     pub fn new(input: &str) -> Self {
@@ -34,7 +35,14 @@ impl Lexer {
             '+' => Token::Plus,
             '-' => Token::Minus,
             '*' => Token::Asterisk,
-            '/' => Token::Slash,
+            '/' => {
+                if self.peek_char() == &'/' {
+                    let line = self.read_line();
+                    Token::Comment(line.to_string())
+                } else {
+                    Token::Slash
+                }
+            }
             '>' => self.peek_is_or('=', Token::Ge, Token::Gt),
             '<' => self.peek_is_or('=', Token::Le, Token::Lt),
             '!' => self.peek_is_eat_or('=', Token::NotEq, Token::Bang),
@@ -66,6 +74,19 @@ impl Lexer {
         };
         self.read_char();
         token
+    }
+    fn read_line(&mut self) -> &str {
+        let position = self.position;
+        while self.peek_char() != &'\n' {
+            self.read_char();
+        }
+        &self.input[position..self.position]
+    }
+    //跳过整行
+    fn _skip_line(&mut self) {
+        while self.peek_char() != &'\n' {
+            self.read_char();
+        }
     }
     //读取标识符
     fn read_identifier(&mut self) -> &str {
@@ -159,11 +180,11 @@ impl Lexer {
         }
     }
     //预检下个字符是否为期待字符，是则返回期待Token，否则返回默认Token
-    fn peek_is_or(&mut self, c: char, expect_token: Token, else_token: Token) -> Token {
+    fn peek_is_or(&mut self, c: char, expect_token: Token, default_token: Token) -> Token {
         if self.peek_char().eq(&c) {
             expect_token
         } else {
-            else_token
+            default_token
         }
     }
 }

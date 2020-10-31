@@ -1,5 +1,6 @@
-use crate::core::parser::Parser;
 use std::fmt::{Display, Formatter, Result};
+
+use crate::core::parser::Parser;
 
 #[derive(Debug)]
 pub struct Program {
@@ -25,6 +26,7 @@ pub enum Statement {
     // ),
     // return
     Return(Option<Expression>),
+    Comment(String),
     //
     Expression(Expression),
 }
@@ -121,6 +123,7 @@ impl Display for Statement {
             }
             Statement::Expression(exp) => write!(f, "{}", exp),
             // Statement::For(_, _, _, _) => write!(f, ""),
+            Statement::Comment(comment) => write!(f, "// {}", comment),
         }
     }
 }

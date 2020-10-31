@@ -1,10 +1,10 @@
-use crate::core::base::ast::BlockStatement;
 use crate::core::{
     base::ast::{BinaryOperator, Expression, Program, Statement, UnaryOperator},
     base::token::Token,
     lexer::Lexer,
-    parser::{BinaryParseFn, ParseResult, Parser, ParserError, Precedence, UnaryParseFn},
+    parser::{BinaryParseFn, Parser, ParserError, ParseResult, Precedence, UnaryParseFn},
 };
+use crate::core::base::ast::BlockStatement;
 
 impl Parser {
     // 从Lexer构建Parser
@@ -43,9 +43,10 @@ impl Parser {
     }
     /// 解析语句
     fn parse_statement(&mut self) -> ParseResult<Statement> {
-        match self.token {
+        match &self.token {
             Token::Let => self.parse_let_statement(),
             Token::Return => self.parse_return_statement(),
+            Token::Comment(comment) => Ok(Statement::Comment(comment.to_string())),
             _ => self.parse_expression_statement(),
         }
     }

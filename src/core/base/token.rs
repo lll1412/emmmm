@@ -13,6 +13,8 @@ pub enum Token {
     Int(String),
     Float(String),
     String(String),
+    /// 行注释// xxx
+    Comment(String),
     //操作符
     /// =
     Assign,
@@ -127,6 +129,7 @@ impl fmt::Display for Token {
             Token::If => write!(f, "if"),
             Token::Else => write!(f, "else"),
             Token::Return => write!(f, "return"),
+            Token::Comment(comment) => write!(f, "// {}", comment)
         }
     }
 }

@@ -1,14 +1,15 @@
-use crate::core::base::ast::{
-    BinaryOperator, BlockStatement, Expression, Program, Statement, UnaryOperator,
-};
-use crate::object::builtins::lookup;
-use crate::object::environment::Environment;
-use crate::object::Object::Boolean;
-use crate::object::{HashKey, Object, RuntimeError};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::rc::Rc;
+
+use crate::core::base::ast::{
+    BinaryOperator, BlockStatement, Expression, Program, Statement, UnaryOperator,
+};
+use crate::object::{HashKey, Object, RuntimeError};
+use crate::object::builtins::lookup;
+use crate::object::environment::Environment;
+use crate::object::Object::Boolean;
 
 pub type EvalResult<T = Object> = Result<T, RuntimeError>;
 pub type Env = Rc<RefCell<Environment>>;
@@ -35,6 +36,7 @@ fn eval_statement(statement: &Statement, env: Env) -> EvalResult {
                 })
         }
         Statement::Expression(expr) => eval_expression(expr, Rc::clone(&env)),
+        Statement::Comment(comment) => Ok(Object::String(comment.to_string())),
     }
 }
 
