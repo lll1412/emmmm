@@ -26,6 +26,84 @@ mod tests {
             }
         };
     }
+
+    #[test]
+    fn recursive_function() {
+        let count_down_const = Constant::CompiledFunction(
+            vec![
+                _make_noop(Opcode::CurrentClosure),
+                _make(Opcode::GetLocal, 0),
+                _make_const(0),
+                _make_noop(Opcode::Sub),
+                _make(Opcode::Call, 1),
+                _make_noop(Opcode::ReturnValue),
+            ]
+                .concat(),
+            1,
+            1,
+        );
+        let inputs = vec![
+            (
+                r"
+            let countDown = fn(x) {
+                countDown(x - 1)
+            }
+            countDown(2)
+            ",
+                vec![
+                    Constant::Integer(1),
+                    count_down_const.clone(),
+                    Constant::Integer(2),
+                ],
+                vec![
+                    _make_closure(1, 0),
+                    _make(Opcode::SetGlobal, 0),
+                    _make(Opcode::GetGlobal, 0),
+                    _make_const(2),
+                    _make(Opcode::Call, 1),
+                    _make_noop(Opcode::Pop),
+                ],
+            ),
+            (
+                r"
+                let wrapper = fn() {
+                    let countDown = fn(x) {
+                        countDown(x - 1)
+                    }
+                    countDown(2)
+                }
+                wrapper()
+                          ",
+                vec![
+                    Constant::Integer(1),
+                    count_down_const,
+                    Constant::Integer(2),
+                    Constant::CompiledFunction(
+                        vec![
+                            _make_closure(1, 0),
+                            _make(Opcode::SetLocal, 0),
+                            _make(Opcode::GetLocal, 0),
+                            _make_const(2),
+                            _make(Opcode::Call, 1),
+                            _make_noop(Opcode::ReturnValue),
+                        ]
+                        .concat(),
+                        1,
+                        0,
+                    ),
+                ],
+                vec![
+                    _make_closure(3, 0),
+                    _make(Opcode::SetGlobal, 0),
+                    _make(Opcode::GetGlobal, 0),
+                    _make(Opcode::Call, 0),
+                    _make_noop(Opcode::Pop),
+                ],
+            ),
+        ];
+
+        run_compile_test(inputs);
+    }
     #[test]
     fn closures() {
         let tests = vec![
@@ -150,9 +228,9 @@ mod tests {
                         vec![
                             _make_const(2),
                             _make(Opcode::SetLocal, 0), // declare b
-                            _make(Opcode::GetFree, 0), // free a
+                            _make(Opcode::GetFree, 0),  // free a
                             _make(Opcode::GetLocal, 0),
-                            _make_closure(4, 2),       // closure
+                            _make_closure(4, 2), // closure
                             _make_noop(Opcode::ReturnValue),
                         ]
                         .concat(),

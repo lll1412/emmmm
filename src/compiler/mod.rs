@@ -152,8 +152,10 @@ impl Compiler {
     fn compile_statement(&mut self, statement: &Statement) -> CompileResult {
         match statement {
             Statement::Let(name, expr) => {
+                //先定义函数名，不然递归会找不着当前函数
+                let symbol = self.symbol_table.borrow_mut().define(name);
                 self.compile_expression(expr)?;
-                self.store_symbol(name);
+                self.store_symbol(symbol);
             }
             Statement::Return(ret) => match ret {
                 None => {
@@ -169,6 +171,9 @@ impl Compiler {
                 if !self.last_instruction_is(Opcode::Assign) {
                     self.emit(Opcode::Pop, vec![]);
                 }
+            }
+            Statement::Comment(_comment) => {
+                //todo ignore comment
             }
         }
         Ok(())
@@ -288,8 +293,14 @@ impl Compiler {
                 let final_pos = self.cur_instruction_len();
                 self.change_operand(jump_always_pos, final_pos);
             }
-            Expression::FunctionLiteral(args, blocks) => {
+            Expression::FunctionLiteral(fun_name, args, blocks) => {
                 self.enter_scope();
+                //函数名
+                if let Some(name) = fun_name {
+                    self.symbol_table
+                        .borrow_mut()
+                        .define_function_name(name.clone());
+                }
                 //参数列表
                 for arg in args {
                     self.symbol_table.borrow_mut().define(arg);
@@ -321,7 +332,7 @@ impl Compiler {
                 let compiled_fn = self.leave_scope();
                 //自由变量
                 for name in frees {
-                    self.load_symbol(name)?;// emit free
+                    self.load_symbol(name)?; // emit free
                 }
                 let constant = Constant::CompiledFunction(compiled_fn, num_locals, args.len());
                 let const_index = self.add_constant(constant);
@@ -446,13 +457,16 @@ impl Compiler {
             SymbolScope::Local => Opcode::GetLocal,
             SymbolScope::Builtin => Opcode::GetBuiltin,
             SymbolScope::Free => Opcode::GetFree,
+            SymbolScope::Function => {
+                self.emit(Opcode::CurrentClosure, vec![]);
+                return Ok(symbol)
+            },
         };
         self.emit(op, vec![symbol.index]);
         Ok(symbol)
     }
     //
-    fn store_symbol(&mut self, name: &str) {
-        let symbol = self.symbol_table.borrow_mut().define(name);
+    fn store_symbol(&mut self, symbol: Symbol) {
         let op = match symbol.scope {
             SymbolScope::Global => Opcode::SetGlobal,
             SymbolScope::Local => Opcode::SetLocal,

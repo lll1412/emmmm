@@ -238,6 +238,14 @@ impl Vm {
                         )?;
                         self.current_frame_ip_inc(n);
                     }
+                    Opcode::CurrentClosure => {
+                        let Closure {
+                            compiled_function,
+                            free_variables,
+                        } = &self.current_frame().closure;
+                        let current_closure = Object::Closure(compiled_function.clone(), free_variables.clone());
+                        self.push_stack(Rc::new(current_closure))?;
+                    }
 
                     Opcode::Assign => {
                         let (global_index, n) = self.read_usize(op_code, ip);

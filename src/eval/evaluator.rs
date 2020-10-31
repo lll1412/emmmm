@@ -6,10 +6,10 @@ use std::rc::Rc;
 use crate::core::base::ast::{
     BinaryOperator, BlockStatement, Expression, Program, Statement, UnaryOperator,
 };
-use crate::object::{HashKey, Object, RuntimeError};
 use crate::object::builtins::lookup;
 use crate::object::environment::Environment;
 use crate::object::Object::Boolean;
+use crate::object::{HashKey, Object, RuntimeError};
 
 pub type EvalResult<T = Object> = Result<T, RuntimeError>;
 pub type Env = Rc<RefCell<Environment>>;
@@ -91,7 +91,7 @@ fn eval_expression(expr: &Expression, env: Env) -> EvalResult {
         }
 
         Expression::Identifier(id) => eval_identifier_expression(Rc::clone(&env), &id),
-        Expression::FunctionLiteral(params, block) => Ok(Object::Function(
+        Expression::FunctionLiteral(_name, params, block) => Ok(Object::Function(
             params.clone(),
             block.clone(),
             Rc::clone(&env),

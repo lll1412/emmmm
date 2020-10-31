@@ -11,6 +11,7 @@ pub enum SymbolScope {
     Local,
     Builtin,
     Free,
+    Function
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -73,6 +74,16 @@ impl SymbolTable {
             index,
         };
         self.store.insert(name, symbol);
+    }
+    pub fn define_function_name(&mut self, name: String) -> Symbol{
+        let symbol = Symbol{
+            name: name.clone(),
+            scope: SymbolScope::Function,
+            index: 0
+        };
+        self.store.insert(name, symbol.clone());
+        // self.num_definitions += 1;
+        symbol
     }
     pub fn resolve(&mut self, name: &str) -> Option<Symbol> {
         self.store

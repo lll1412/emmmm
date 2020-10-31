@@ -89,10 +89,11 @@ op_build!(
         //内置函数
         GetBuiltin(1),
         Closure(2, 1),
+        CurrentClosure(),
         GetFree(1),
         // 赋值操作
         Assign(2),
-        // 函数调用
+        // 函数调用(arg_len)
         Call(1),
         // 函数返回值
         ReturnValue(),

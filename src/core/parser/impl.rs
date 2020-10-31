@@ -1,10 +1,10 @@
+use crate::core::base::ast::BlockStatement;
 use crate::core::{
     base::ast::{BinaryOperator, Expression, Program, Statement, UnaryOperator},
     base::token::Token,
     lexer::Lexer,
-    parser::{BinaryParseFn, Parser, ParserError, ParseResult, Precedence, UnaryParseFn},
+    parser::{BinaryParseFn, ParseResult, Parser, ParserError, Precedence, UnaryParseFn},
 };
-use crate::core::base::ast::BlockStatement;
 
 impl Parser {
     // 从Lexer构建Parser
@@ -66,7 +66,10 @@ impl Parser {
         self.expect_peek(Token::Assign, ParserError::ExpectedAssign)?;
         //expr
         self.next_token(); //eat =
-        let expression = self.parse_expression(Precedence::Lowest)?;
+        let mut expression = self.parse_expression(Precedence::Lowest)?;
+        if let Expression::FunctionLiteral(_, params, block) = expression {
+            expression = Expression::FunctionLiteral(Some(name.clone()), params, block);
+        }
         if self.peek_token == Token::Semicolon {
             self.next_token(); //eat ;
         }
@@ -203,7 +206,7 @@ impl Parser {
         let params = self.parse_function_parameters()?;
         self.expect_peek_is(Token::Lbrace)?; // eat )
         let blocks = self.parse_block_statement()?;
-        Ok(Expression::FunctionLiteral(params, blocks))
+        Ok(Expression::FunctionLiteral(None, params, blocks))
     }
     ///解析if表达式
     fn parse_if_expression(&mut self) -> ParseResult {

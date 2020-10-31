@@ -102,7 +102,7 @@ pub enum RuntimeError {
     UnKnownOpCode(Opcode),
 
     CustomErrMsg(String),
-
+    /// (expect, actual)
     WrongArgumentCount(usize, usize),
     NotFunction(Object),
     /*--------------------------*/
