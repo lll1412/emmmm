@@ -7,6 +7,7 @@ mod tests {
     use crate::core::base::ast::Program;
     use crate::object::{HashKey, Object, RuntimeError};
     use crate::vm::Vm;
+    use std::time::Instant;
 
     macro_rules! hash {
         {} => {
@@ -34,9 +35,9 @@ mod tests {
                     fibonacci(n - 1) + fibonacci(n - 2)
                 }
             }
-            fibonacci(19)
+            fibonacci(26)
             ",
-            Object::Integer(4181),
+            Object::Integer(121393),
         )];
         run_vm_test(inputs);
     }
@@ -481,8 +482,16 @@ mod tests {
             match compiler.compile(&program) {
                 Ok(byte_code) => {
                     let mut vm = Vm::new(byte_code);
+                    let start = Instant::now();
                     match vm.run() {
                         Ok(object) => {
+                            let duration = start.elapsed();
+                            println!(
+                                "{} s {} ms, result: {}",
+                                duration.as_secs(),
+                                duration.as_millis(),
+                                object
+                            );
                             test_expected_object(input, &object, &expected);
                         }
                         Err(e) => panic!("Input: {}\nRuntime Error: {:?}", input, e),

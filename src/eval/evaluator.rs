@@ -91,7 +91,7 @@ fn eval_expression(expr: &Expression, env: Env) -> EvalResult {
         }
 
         Expression::Identifier(id) => eval_identifier_expression(Rc::clone(&env), &id),
-        Expression::FunctionLiteral(_name, params, block) => Ok(Object::Function(
+        Expression::FunctionLiteral(params, block) => Ok(Object::Function(
             params.clone(),
             block.clone(),
             Rc::clone(&env),

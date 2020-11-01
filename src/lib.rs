@@ -1,11 +1,12 @@
+use crate::compiler::{Compiler, Constants, RcSymbolTable};
+use crate::core::base::ast::Program;
+use crate::eval::evaluator;
+use crate::eval::evaluator::Env;
+use crate::vm::{Globals, Vm};
 use std::cell::RefCell;
 use std::fmt;
 use std::rc::Rc;
-use crate::eval::evaluator;
-use crate::core::base::ast::Program;
-use crate::eval::evaluator::Env;
-use crate::compiler::Compiler;
-use crate::vm::{Globals, Vm};
+use std::time::Instant;
 
 pub mod benchmark;
 mod compiler;
@@ -39,7 +40,7 @@ fn has_flag(flag: &str) -> bool {
     std::env::args().any(|arg| arg == flag)
 }
 pub fn eval_or_compile() -> Engine {
-    if has_flag("--benchmark") {
+    if has_flag("--compile") {
         Engine::Compile
     } else {
         Engine::Eval
@@ -60,14 +61,24 @@ pub fn exe_with_eval(program: &Program, env: &Env) {
     }
 }
 
-pub fn exe_with_vm(program: &Program, compiler: &mut Compiler, globals: Globals) {
+pub fn exe_with_vm(
+    program: &Program,
+    symbol_table: RcSymbolTable,
+    constants: Constants,
+    globals: Globals,
+) {
+    let mut compiler = Compiler::with_state(symbol_table, constants);
     let result = compiler.compile(program);
     match result {
         Ok(byte_code) => {
             let mut vm = Vm::with_global_store(byte_code, globals.clone());
+            let start = Instant::now();
             let result = vm.run();
             match result {
-                Ok(object) => println!("{}", object),
+                Ok(object) => {
+                    println!("{}", object);
+                    println!("takes {} ms", start.elapsed().as_millis());
+                }
                 Err(vm_err) => eprintln!("{:?}", vm_err),
             }
         }

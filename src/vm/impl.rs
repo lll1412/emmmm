@@ -2,13 +2,29 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use crate::compiler::code::{Opcode, read_operands};
-use crate::object;
-use crate::object::{Closure, HashKey, Object, RuntimeError};
+use crate::compiler::code::{Opcode, read_operands, _read_operand};
+use crate::object::{HashKey, Object, RuntimeError};
+use crate::object::builtins::BUILTINS;
 use crate::vm::{FALSE, GLOBALS_SIZE, NULL, RCFrame, STACK_SIZE, TRUE, Vm, VmResult};
 use crate::vm::frame::Frame;
 
 impl Vm {
+    /// # 执行非运算
+    pub fn execute_not_expression(&mut self, value: &Object) -> VmResult<()>{
+        if value == &TRUE {
+            self.push_stack(Rc::new(FALSE))?;
+        } else if value == &FALSE {
+            self.push_stack(Rc::new(TRUE))?;
+        } else if value == &NULL {
+            self.push_stack(Rc::new(NULL))?;
+        } else {
+            return Err(RuntimeError::UnSupportedUnOperation(
+                Opcode::Not,
+                (value).clone(),
+            ));
+        }
+        Ok(())
+    }
     /// # 执行赋值操作
     pub fn execute_assign_operation(&mut self, global_index: usize) -> VmResult<()> {
         let obj = &self.get_global(global_index)?;
@@ -68,6 +84,7 @@ impl Vm {
         self.push_stack(Rc::new(Object::Hash(RefCell::new(hash))))
     }
     /// # 执行二元操作
+    #[inline]
     pub fn execute_binary_operation(&mut self, op: Opcode) -> VmResult {
         let right = &*self.pop_stack()?;
         let left = &*self.pop_stack()?;
@@ -86,7 +103,7 @@ impl Vm {
                         }
                         left_val / right_val
                     }
-                    _ => return Err(RuntimeError::UnSupportedBinOperator(op)),
+                    _ => return Err(RuntimeError::UnSupportedBinOperator(op.clone())),
                 };
                 Ok(Rc::new(Object::Integer(r)))
             }
@@ -95,14 +112,14 @@ impl Vm {
                     Ok(Rc::new(Object::String(left_val.clone() + right_val)))
                 } else {
                     Err(RuntimeError::UnSupportedBinOperation(
-                        op,
+                        op.clone(),
                         left.clone(),
                         right.clone(),
                     ))
                 }
             }
             _ => Err(RuntimeError::UnSupportedBinOperation(
-                op,
+                op.clone(),
                 left.clone(),
                 right.clone(),
             )),
@@ -137,7 +154,7 @@ impl Vm {
                     Opcode::LessThan => left < right,
                     Opcode::Equal => left == right,
                     Opcode::NotEqual => left != right,
-                    _ => return Err(RuntimeError::UnSupportedBinOperator(op)),
+                    _ => return Err(RuntimeError::UnSupportedBinOperator(op.clone())),
                 };
                 return Ok(if bool { Rc::new(TRUE) } else { Rc::new(FALSE) });
             }
@@ -159,7 +176,7 @@ impl Vm {
             }
             _ => {
                 return Err(RuntimeError::UnSupportedBinOperation(
-                    op,
+                    op.clone(),
                     Object::clone(&left),
                     Object::clone(&right),
                 ));
@@ -168,29 +185,25 @@ impl Vm {
         Ok(Rc::new(r))
     }
     /// 函数调用
+    #[inline]
     pub fn call_function(&mut self, arg_nums: usize) -> VmResult<()> {
         self.sp -= arg_nums;
-        let cf = &*self.stack[self.sp - 1]; //往回跳过参数个数位置, 当前位置是函数
-        match cf {
-            Object::Closure(
-                object::CompiledFunction {
-                    insts,
-                    num_locals,
-                    num_parameters,
-                },
-                free_variables,
-            ) => {
-                if arg_nums != *num_parameters {
-                    return Err(RuntimeError::WrongArgumentCount(*num_parameters, arg_nums));
+        let callee = &*self.stack[self.sp - 1]; //往回跳过参数个数位置, 当前位置是函数
+        match callee {
+            Object::Closure(closure) => {
+                if arg_nums != closure.compiled_function.num_parameters {
+                    return Err(RuntimeError::WrongArgumentCount(
+                        closure.compiled_function.num_parameters,
+                        arg_nums,
+                    ));
                 }
-                let compiled_function =
-                    object::CompiledFunction::new(insts.clone(), *num_locals, arg_nums);
-                let closure = Closure::new(compiled_function, free_variables.clone());
-                let frame = Frame::new(closure, self.sp);
-                //Equivalent to
-                self.sp += num_locals;
-                // self.sp = frame.base_pointer + num_locals;
+                let num_locals = closure.compiled_function.num_locals;
+                let frame = Frame::new(closure.clone(), self.sp);
+                // Equivalent to
+                // self.sp += closure.compiled_function.num_locals;
+                self.sp = frame.base_pointer + num_locals;
                 self.push_frame(frame); //进入函数内部（下一帧）
+                self.call_count +=1;
             }
             Object::Builtin(builtin_fun) => {
                 //内置函数
@@ -212,26 +225,36 @@ impl Vm {
     }
 
     /// # 计算该指令操作数的长度，方便指令指针自增
-    pub fn increment_num(&self, op: Opcode) -> usize {
+    pub fn _increment_num(&self, op: Opcode) -> usize {
         op.definition().operand_width.iter().sum()
     }
     /// # 读取一个无符号整数，并返回字节长度
+
     pub fn read_usize(&self, op_code: Opcode, ip: usize) -> (usize, usize) {
         let (operands, n) = read_operands(
-            op_code.definition(),
+            &op_code.definition(),
             &self.current_frame().instructions()[ip..],
         );
         (operands[0], n)
+    }
+    #[inline]
+    pub fn _read_one_byte(&self, width: usize, ip: usize) -> usize{
+        _read_operand(width, &self.current_frame().instructions()[ip..])
+    }
+    #[inline]
+    pub fn read_u16(&self, insts: &[u8], start: usize) -> usize {
+        u16::from_be_bytes([insts[start], insts[start + 1]]) as usize
     }
     /// # 压入栈中
     pub fn push_stack(&mut self, object: Rc<Object>) -> VmResult<()> {
         if self.sp == STACK_SIZE {
             Err(RuntimeError::StackOverflow)
         } else {
-            if self.sp >= self.stack.len() {
+            if self.sp == self.stack.len() {
                 self.stack.push(object);
             } else {
-                self.stack.insert(self.sp, object);
+                //之前是insert方法，换索引赋值速度快了很多
+                self.stack[self.sp] = object;
             }
             self.sp += 1;
             Ok(())
@@ -253,10 +276,11 @@ impl Vm {
         if global_index == GLOBALS_SIZE {
             Err(RuntimeError::StackOverflow)
         } else {
-            if global_index == self.globals.borrow().len() {
-                self.globals.borrow_mut().push(global);
+            let mut globals = self.globals.borrow_mut();
+            if global_index == globals.len() {
+                globals.push(global);
             } else {
-                self.globals.borrow_mut()[global_index] = global;
+                globals[global_index] = global;
             }
             Ok(())
         }
@@ -264,20 +288,21 @@ impl Vm {
     /// # 取出全局变量
     pub fn get_global(&self, global_index: usize) -> VmResult {
         let globals = self.globals.borrow();
-        let option = globals.get(global_index);
-        if let Some(object) = option {
-            Ok(object.clone())
-        } else {
-            Err(RuntimeError::CustomErrMsg(format!(
-                "global has not such element. index: {}",
-                global_index
-            )))
-        }
+        let option = &globals[global_index];
+        Ok(option.clone())
+        // if let Some(object) = option {
+        //     Ok(object.clone())
+        // } else {
+        //     Err(RuntimeError::CustomErrMsg(format!(
+        //         "global has not such element. index: {}",
+        //         global_index
+        //     )))
+        // }
     }
     pub fn get_builtin(&self, builtin_index: usize) -> VmResult {
-        let option = self.builtins.get(builtin_index);
+        let option = BUILTINS.get(builtin_index);
         if let Some(builtin_fun) = option {
-            Ok(builtin_fun.clone())
+            Ok(Rc::new(builtin_fun.builtin.clone()))
         } else {
             Err(RuntimeError::CustomErrMsg(format!(
                 "builtin has not such element. index: {}",
@@ -297,29 +322,26 @@ impl Vm {
             Ok(object.clone())
         }
     }
-    pub fn get_const_object(&self, index: usize) -> Object {
-        self.constants.borrow()[index].to_object()
+    pub fn get_const_object(&self, index: usize) -> Rc<Object> {
+        self.constants.borrow()[index].clone()
     }
-    pub fn current_frame_ip_inc(&mut self, n: usize) -> usize {
-        self.frames.last_mut().expect("empty frames").ip += n;
+    pub fn current_frame_ip_inc(&mut self, n: usize) {
+        self.frames.last_mut().unwrap().ip += n;
+    }
+    pub fn _current_frame_inc_and_get(&mut self, n: usize) -> usize {
+        self.frames.last_mut().unwrap().ip += n;
         self.current_frame().ip
     }
-    pub fn set_current_frame_ip(&mut self, n: usize) {
-        self.frames.last_mut().expect("empty frames").ip = n;
-    }
-    pub fn current_frame_instructions_len(&self) -> usize {
-        self.current_frame().instructions().len()
+    pub fn _set_current_frame_ip(&mut self, n: usize) {
+        self.frames.last_mut().unwrap().ip = n;
     }
     pub fn current_frame(&self) -> &RCFrame {
-        self.frames.last().expect("empty frames")
-    }
-    pub fn current_frame_bp(&self) -> usize {
-        self.current_frame().base_pointer
+        &self.frames.last().unwrap()
     }
     pub fn push_frame(&mut self, frame: RCFrame) {
         self.frames.push(frame);
     }
     pub fn pop_frame(&mut self) -> RCFrame {
-        self.frames.pop().expect("empty frames")
+        self.frames.pop().unwrap()
     }
 }

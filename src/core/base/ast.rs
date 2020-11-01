@@ -49,7 +49,7 @@ pub enum Expression {
     // 布尔值字面量
     BoolLiteral(bool),
     // 函数字面量
-    FunctionLiteral(Option<String>, Vec<String>, BlockStatement),
+    FunctionLiteral(Vec<String>, BlockStatement),
     // 数组字面量
     ArrayLiteral(Vec<Expression>),
     // 索引表达式
@@ -145,10 +145,9 @@ impl Display for Expression {
                 }
                 Ok(())
             }
-            Expression::FunctionLiteral(name, params, blocks) => write!(
+            Expression::FunctionLiteral(params, blocks) => write!(
                 f,
-                "fn {name}({params}) {blocks}",
-                name = name.as_ref().unwrap_or(&String::new()),
+                "fn({params}) {blocks}",
                 params = params.join(", "),
                 blocks = blocks
             ),

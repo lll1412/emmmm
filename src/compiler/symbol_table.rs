@@ -11,7 +11,7 @@ pub enum SymbolScope {
     Local,
     Builtin,
     Free,
-    Function
+    // Function
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -24,9 +24,9 @@ pub struct Symbol {
 #[derive(Debug, Clone)]
 pub struct SymbolTable {
     pub outer: Option<Rc<RefCell<SymbolTable>>>,
-    pub store: HashMap<String, Symbol>,
+    pub store: HashMap<String, Rc<Symbol>>,
     pub num_definitions: usize,
-    pub free_symbols: Vec<Symbol>,
+    pub free_symbols: Vec<Rc<Symbol>>,
 }
 
 impl SymbolTable {
@@ -38,7 +38,7 @@ impl SymbolTable {
             free_symbols: vec![],
         }
     }
-    pub fn define(&mut self, name: &str) -> Symbol {
+    pub fn define(&mut self, name: &str) -> Rc<Symbol> {
         let scope = if self.outer.is_none() {
             SymbolScope::Global
         } else {
@@ -49,11 +49,12 @@ impl SymbolTable {
             scope,
             index: self.num_definitions,
         };
+        let symbol = Rc::new(symbol);
         self.store.insert(name.to_string(), symbol.clone());
         self.num_definitions += 1;
         symbol
     }
-    fn define_free(&mut self, original: Symbol) -> Symbol {
+    fn define_free(&mut self, original: Rc<Symbol>) -> Rc<Symbol> {
         let name = original.name.clone();
         //加入自由变量表
         self.free_symbols.push(original);
@@ -62,6 +63,7 @@ impl SymbolTable {
             scope: SymbolScope::Free,
             index: self.free_symbols.len() - 1,
         };
+        let symbol = Rc::new(symbol);
         //作用域改为free，加入符号表
         self.store.insert(name, symbol.clone());
         symbol
@@ -73,31 +75,25 @@ impl SymbolTable {
             scope: SymbolScope::Builtin,
             index,
         };
+        let symbol = Rc::new(symbol);
         self.store.insert(name, symbol);
     }
-    pub fn define_function_name(&mut self, name: String) -> Symbol{
-        let symbol = Symbol{
-            name: name.clone(),
-            scope: SymbolScope::Function,
-            index: 0
-        };
-        self.store.insert(name, symbol.clone());
-        // self.num_definitions += 1;
-        symbol
-    }
-    pub fn resolve(&mut self, name: &str) -> Option<Symbol> {
+
+    /// 先从当前符号表查找
+    /// 没有则解析父符号表
+    pub fn resolve(&mut self, name: &str) -> Option<Rc<Symbol>> {
         self.store
             .get(name)
             .cloned()
             .or_else(|| self.resolve_outer(name))
     }
-    fn resolve_outer(&mut self, name: &str) -> Option<Symbol> {
+    fn resolve_outer(&mut self, name: &str) -> Option<Rc<Symbol>> {
         self.outer
-            .clone()
+            .as_ref()
             .and_then(|s| s.borrow_mut().resolve(name))
             .map(|s| self.resolve_free(s))
     }
-    fn resolve_free(&mut self, s: Symbol) -> Symbol {
+    fn resolve_free(&mut self, s: Rc<Symbol>) -> Rc<Symbol> {
         if s.scope == SymbolScope::Global || s.scope == SymbolScope::Builtin {
             s
         } else {

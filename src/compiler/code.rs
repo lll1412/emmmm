@@ -1,7 +1,5 @@
 use std::fmt::{Display, Formatter};
 
-use crate::object::Object;
-
 pub type Instructions = Vec<u8>;
 
 macro_rules! op_build {
@@ -89,7 +87,8 @@ op_build!(
         //内置函数
         GetBuiltin(1),
         Closure(2, 1),
-        CurrentClosure(),
+        // GetThis(),
+        // CurrentClosure(),
         GetFree(1),
         // 赋值操作
         Assign(2),
@@ -109,26 +108,41 @@ pub struct Definition {
     pub name: String,
     pub operand_width: Vec<usize>,
 }
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum Constant {
-    Integer(i64),
-    String(String),
-    /// insts, num_locals, num_parameters
-    CompiledFunction(Instructions, usize, usize),
-}
-
-impl Constant {
-    pub fn to_object(&self) -> Object {
-        match self {
-            Constant::Integer(val) => Object::Integer(*val),
-            Constant::String(val) => Object::String(val.clone()),
-            Constant::CompiledFunction(insts, num_locals, num_parameters) => {
-                Object::CompiledFunction(insts.clone(), *num_locals, *num_parameters)
-            }
-        }
-    }
-}
+//
+// #[derive(Debug, Clone, PartialEq)]
+// pub enum Constant {
+//     Integer(i64),
+//     String(String),
+//     /// insts, num_locals, num_parameters
+//     CompiledFunction(Instructions, usize, usize),
+// }
+//
+// impl Constant {
+//     pub fn _to_object(&self) -> Object {
+//         match self {
+//             Constant::Integer(val) => Object::Integer(*val),
+//             Constant::String(val) => Object::String(val.clone()),
+//             Constant::CompiledFunction(insts, num_locals, num_parameters) => {
+//                 Object::CompiledFunction(CompiledFunction {
+//                     insts: Rc::new(insts.clone()),
+//                     num_locals: *num_locals,
+//                     num_parameters: *num_parameters,
+//                 })
+//             }
+//         }
+//     }
+// }
+// impl Display for Constant {
+//     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+//         match self {
+//             Constant::Integer(val) => write!(f, "{}", val),
+//             Constant::String(val) => write!(f, "{}", val),
+//             Constant::CompiledFunction(insts, _num_locals, _num_params) => {
+//                 write!(f, "{}", _print_instructions(insts))
+//             }
+//         }
+//     }
+// }
 
 /// # 生成 指令
 /// ## 操作码, 操作数 => 二进制指令
@@ -209,10 +223,10 @@ pub fn _print_instructions(instructions: &Instructions) -> String {
 }
 
 /// # 读取操作数
-pub fn read_operands(def: Definition, instructions: &[u8]) -> (Vec<usize>, usize) {
-    let mut operands = Vec::with_capacity(def.operand_width.len());
+pub fn read_operands(def: &Definition, instructions: &[u8]) -> (Vec<usize>, usize) {
+    let mut operands = vec![];
     let mut bytes_read = 0;
-    for width in def.operand_width {
+    for width in &def.operand_width {
         match width {
             2 => operands.push(read_usize(&instructions[bytes_read..], 2)),
             1 => {
@@ -224,7 +238,13 @@ pub fn read_operands(def: Definition, instructions: &[u8]) -> (Vec<usize>, usize
     }
     (operands, bytes_read)
 }
-
+pub fn _read_operand(width: usize, insts: &[u8]) -> usize {
+    match width {
+        2 => read_usize(&insts, 2),
+        1 => read_usize(&insts, 1),
+        _ => unimplemented!(),
+    }
+}
 /// # 从指令中读取数据并转换为usize
 pub fn read_usize(instructions: &[u8], n: usize) -> usize {
     let mut bytes = [0; 8];

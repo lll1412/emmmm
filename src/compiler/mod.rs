@@ -1,19 +1,21 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::compiler::code::{Constant, Instructions, Opcode};
+use crate::compiler::code::{Instructions, Opcode};
 use crate::compiler::symbol_table::{Symbol, SymbolScope, SymbolTable};
 use crate::core::base::ast::{
     BinaryOperator, BlockStatement, Expression, Program, Statement, UnaryOperator,
 };
 use crate::object::builtins::BUILTINS;
+use crate::create_rc_ref_cell;
+use crate::object::{Object, CompiledFunction};
 
 pub mod code;
 pub mod symbol_table;
 mod test;
 
 type CompileResult<T = ()> = std::result::Result<T, CompileError>;
-pub type Constants = Rc<RefCell<Vec<Constant>>>;
+pub type Constants = Rc<RefCell<Vec<Rc<Object>>>>;
 pub type RcSymbolTable = Rc<RefCell<SymbolTable>>;
 
 #[derive(Debug, Clone)]
@@ -94,9 +96,9 @@ impl EmittedInstruction {
 
 impl Compiler {
     pub fn new() -> Self {
-        let sb = Rc::new(RefCell::new(SymbolTable::new()));
-        let c = Constants::new(RefCell::new(vec![]));
-        Compiler::with_state(sb, c)
+        let symbol_table = create_rc_ref_cell(SymbolTable::new());
+        let constants = create_rc_ref_cell(vec![]);
+        Compiler::with_state(symbol_table, constants)
     }
     pub fn with_state(symbol_table: RcSymbolTable, constants: Constants) -> Self {
         for (i, builtin) in BUILTINS.iter().enumerate() {
@@ -119,7 +121,7 @@ impl Compiler {
         Ok(self.bytecode())
     }
     pub fn bytecode(&mut self) -> ByteCode {
-        ByteCode::new(self.cur_instruction().clone(), self.constants.clone())
+        ByteCode::new(self.cur_instruction().clone(), Constants::clone(&self.constants))
     }
     fn enter_scope(&mut self) {
         //当前作用域
@@ -188,7 +190,7 @@ impl Compiler {
     fn compile_expression(&mut self, expression: &Expression) -> CompileResult {
         match expression {
             Expression::IntLiteral(value) => {
-                let i = self.add_constant(Constant::Integer(*value));
+                let i = self.add_constant(Object::Integer(*value));
                 self.emit(Opcode::Constant, vec![i]);
             }
             Expression::BoolLiteral(bool) => {
@@ -199,7 +201,7 @@ impl Compiler {
                 }
             }
             Expression::StringLiteral(string) => {
-                let i = self.add_constant(Constant::String(string.to_string()));
+                let i = self.add_constant(Object::String(string.to_string()));
                 self.emit(Opcode::Constant, vec![i]);
             }
             Expression::ArrayLiteral(items) => {
@@ -293,14 +295,14 @@ impl Compiler {
                 let final_pos = self.cur_instruction_len();
                 self.change_operand(jump_always_pos, final_pos);
             }
-            Expression::FunctionLiteral(fun_name, args, blocks) => {
+            Expression::FunctionLiteral(args, blocks) => {
                 self.enter_scope();
                 //函数名
-                if let Some(name) = fun_name {
-                    self.symbol_table
-                        .borrow_mut()
-                        .define_function_name(name.clone());
-                }
+                // if let Some(name) = fun_name {
+                //     self.symbol_table
+                //         .borrow_mut()
+                //         .define_function_name(name.clone());
+                // }
                 //参数列表
                 for arg in args {
                     self.symbol_table.borrow_mut().define(arg);
@@ -334,7 +336,11 @@ impl Compiler {
                 for name in frees {
                     self.load_symbol(name)?; // emit free
                 }
-                let constant = Constant::CompiledFunction(compiled_fn, num_locals, args.len());
+                let constant = Object::CompiledFunction(CompiledFunction{
+                    insts: Rc::new(compiled_fn),
+                    num_locals,
+                    num_parameters: args.len()
+                });
                 let const_index = self.add_constant(constant);
                 //函数常量索引
                 self.emit(Opcode::Closure, vec![const_index, free_count]);
@@ -394,8 +400,8 @@ impl Compiler {
         Ok(())
     }
     /// 常量池添加常量，返回常量索引
-    fn add_constant(&mut self, constant: Constant) -> usize {
-        self.constants.borrow_mut().push(constant);
+    fn add_constant(&mut self, constant: Object) -> usize {
+        self.constants.borrow_mut().push(Rc::new(constant));
         self.constants.borrow().len() - 1
     }
     /// 指令表添加指令，返回指令开始位置
@@ -446,7 +452,7 @@ impl Compiler {
         self.replace_instruction(op_pos, new_instruction);
     }
     /// 读取符号表元素（生成一条获取该数据的指令）
-    fn load_symbol(&mut self, name: &str) -> CompileResult<Symbol> {
+    fn load_symbol(&mut self, name: &str) -> CompileResult<()> {
         let option = self.symbol_table.borrow_mut().resolve(name);
         let symbol = match option {
             None => return Err(CompileError::UndefinedIdentifier(name.to_string())),
@@ -457,16 +463,12 @@ impl Compiler {
             SymbolScope::Local => Opcode::GetLocal,
             SymbolScope::Builtin => Opcode::GetBuiltin,
             SymbolScope::Free => Opcode::GetFree,
-            SymbolScope::Function => {
-                self.emit(Opcode::CurrentClosure, vec![]);
-                return Ok(symbol)
-            },
         };
         self.emit(op, vec![symbol.index]);
-        Ok(symbol)
+        Ok(())
     }
     //
-    fn store_symbol(&mut self, symbol: Symbol) {
+    fn store_symbol(&mut self, symbol: Rc<Symbol>) {
         let op = match symbol.scope {
             SymbolScope::Global => Opcode::SetGlobal,
             SymbolScope::Local => Opcode::SetLocal,

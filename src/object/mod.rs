@@ -22,10 +22,12 @@ pub enum Object {
     Array(RefCell<Vec<Object>>),
     Hash(RefCell<HashMap<HashKey, Object>>),
     Function(Vec<String>, BlockStatement, Rc<RefCell<Environment>>),
-    CompiledFunction(Instructions, usize, usize),
+    // CompiledFunction(Instructions, usize, usize),
+    CompiledFunction(CompiledFunction),
     Builtin(BuiltinFunction),
     /// compiled function, free variables
-    Closure(CompiledFunction, Vec<Rc<Object>>),
+    // Closure(CompiledFunction, Vec<Rc<Object>>),
+    Closure(Closure),
     Return(Box<Object>),
     Null,
 }
@@ -46,13 +48,14 @@ impl Closure {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct CompiledFunction {
-    pub insts: Instructions,
+    pub insts: Rc<Instructions>,
     pub num_locals: usize,
     pub num_parameters: usize,
 }
 
 impl CompiledFunction {
     pub fn new(insts: Instructions, num_locals: usize, num_parameters: usize) -> Self {
+        let insts = Rc::new(insts);
         Self {
             insts,
             num_locals,
@@ -251,10 +254,10 @@ impl Display for Object {
                     .join(", ");
                 write!(f, "{{{map}}}", map = x)
             }
-            Object::CompiledFunction(insts, _num_locals, _num_parameters) => {
-                write!(f, "{}", _print_instructions(insts))
+            Object::CompiledFunction(cf) => {
+                write!(f, "{}", _print_instructions(&cf.insts))
             }
-            Object::Closure(cf, _free) => write!(f, "{}", _print_instructions(&cf.insts)),
+            Object::Closure(cl) => write!(f, "{}", _print_instructions(&cl.compiled_function.insts)),
         }
     }
 }

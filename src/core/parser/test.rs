@@ -132,7 +132,7 @@ mod tests {
         let tests = [
             (
                 "fn(x, y) { x=1; x + y; }".to_string(),
-                Expression::FunctionLiteral(None,
+                Expression::FunctionLiteral(
                     vec!["x".to_string(), "y".to_string()],
                     BlockStatement {
                         statements: vec![
@@ -152,7 +152,7 @@ mod tests {
             ),
             (
                 "fn() { return 1;}".to_string(),
-                Expression::FunctionLiteral(None,
+                Expression::FunctionLiteral(
                     vec![],
                     BlockStatement {
                         statements: vec![Statement::Return(Some(Expression::IntLiteral(1)))],

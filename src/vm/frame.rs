@@ -1,5 +1,6 @@
 use crate::compiler::code::Instructions;
 use crate::object::Closure;
+use std::rc::Rc;
 
 #[derive(Debug, Clone)]
 pub struct Frame {
@@ -16,7 +17,7 @@ impl Frame {
             base_pointer,
         }
     }
-    pub fn instructions(&self) -> Instructions {
+    pub fn instructions(&self) -> Rc<Instructions> {
         self.closure.compiled_function.insts.clone()
     }
 }

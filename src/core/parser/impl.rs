@@ -67,8 +67,8 @@ impl Parser {
         //expr
         self.next_token(); //eat =
         let mut expression = self.parse_expression(Precedence::Lowest)?;
-        if let Expression::FunctionLiteral(_, params, block) = expression {
-            expression = Expression::FunctionLiteral(Some(name.clone()), params, block);
+        if let Expression::FunctionLiteral(params, block) = expression {
+            expression = Expression::FunctionLiteral(params, block);
         }
         if self.peek_token == Token::Semicolon {
             self.next_token(); //eat ;
@@ -206,7 +206,7 @@ impl Parser {
         let params = self.parse_function_parameters()?;
         self.expect_peek_is(Token::Lbrace)?; // eat )
         let blocks = self.parse_block_statement()?;
-        Ok(Expression::FunctionLiteral(None, params, blocks))
+        Ok(Expression::FunctionLiteral(params, blocks))
     }
     ///解析if表达式
     fn parse_if_expression(&mut self) -> ParseResult {

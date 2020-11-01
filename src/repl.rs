@@ -2,10 +2,10 @@ use std::io;
 use std::io::Write;
 use std::rc::Rc;
 
-use crate::{create_rc_ref_cell, Engine, exe_with_eval, exe_with_vm};
-use crate::compiler::Compiler;
+use crate::compiler::symbol_table::SymbolTable;
 use crate::core::parser::Parser;
 use crate::object::{environment, Object};
+use crate::{create_rc_ref_cell, exe_with_eval, exe_with_vm, Engine};
 
 const PROMPT: &str = ">> ";
 const EXIT: &str = "exit\r\n";
@@ -17,7 +17,8 @@ pub fn start(engine: Engine) {
     let env = create_rc_ref_cell(environment::Environment::new());
     //for compiler and vm
     let globals = create_rc_ref_cell(Vec::<Rc<Object>>::new());
-    let mut compiler = Compiler::new();
+    let symbol_table = create_rc_ref_cell(SymbolTable::new());
+    let constants = create_rc_ref_cell(vec![]);
 
     let reader = io::stdin();
     loop {
@@ -34,6 +35,9 @@ pub fn start(engine: Engine) {
         if input == ENV {
             println!("Exists Variables: {:?}", env.borrow().keys());
             continue;
+        } else if input == "Global\r\n" {
+            println!("Globals: {:#?}", globals);
+            continue;
         }
 
         let mut parser = Parser::from(&input);
@@ -47,7 +51,12 @@ pub fn start(engine: Engine) {
         } else {
             match engine {
                 Engine::Eval => exe_with_eval(&program, &env),
-                Engine::Compile => exe_with_vm(&program, &mut compiler, globals.clone()),
+                Engine::Compile => exe_with_vm(
+                    &program,
+                    symbol_table.clone(),
+                    constants.clone(),
+                    globals.clone(),
+                ),
             }
         }
     }
