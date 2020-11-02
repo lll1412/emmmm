@@ -11,8 +11,12 @@ use crate::vm::Vm;
 
 pub fn benchmark(engine: Engine) {
     println!("Welcome to the 👽 programming language in {}", engine);
-    //n = 21, takes 10 s.
-    let n = 30;
+    // todo 优化中，go版本目前n=35是4.5s
+    // no optimized, n = 21, takes 10s.
+    // optimized 1, n = 30, takes 2s.
+    // optimized 2, n = 35, takes 7.8s.
+    // optimized 3, n = 35, takes 3.4s.
+    let n = 35;
     let code = &format!(
         r"let fibonacci = fn(x) {{
              if x < 2 {{
@@ -37,13 +41,14 @@ pub fn benchmark(engine: Engine) {
         Engine::Compile => {
             let mut compiler = Compiler::new();
             let byte_code = compiler.compile(&program).expect("compile error");
-            let cs = &byte_code.constants;
-            for x in cs.borrow().iter() {
-                println!("-----");
-                println!("{}", x);
-            }
+            // let cs = &byte_code.constants;
+            // for x in cs.borrow().iter() {
+            //     println!("-----");
+            //     println!("{}", x);
+            // }
+            let mut vm = Vm::new(byte_code);
             start = Instant::now();
-            let result = Vm::new(byte_code).run().expect("runtime error");
+            let result = vm.run().expect("runtime error");
             Object::clone(&result)
         }
     };

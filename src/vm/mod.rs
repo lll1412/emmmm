@@ -1,7 +1,5 @@
 use std::cell::RefCell;
-use std::collections::{BTreeMap, HashMap};
 use std::rc::Rc;
-use std::time::{Duration, Instant};
 
 use crate::compiler::{ByteCode, Constants};
 use crate::compiler::code::{Opcode, read_usize};
@@ -16,10 +14,12 @@ mod test;
 pub type VmResult<T = Rc<Object>> = std::result::Result<T, RuntimeError>;
 pub type Globals = Rc<RefCell<Vec<Rc<Object>>>>;
 pub type RCFrame = Frame;
+pub type Stack = Vec<Rc<Object>>;
 
 const GLOBALS_SIZE: usize = 0xFFFF;
 const STACK_SIZE: usize = 2048;
 const MAX_FRAMES: usize = 1024;
+const MAX_INT_CACHE: usize = 128;
 
 pub const TRUE: Object = Object::Boolean(true);
 pub const FALSE: Object = Object::Boolean(false);
@@ -30,20 +30,20 @@ pub struct Vm {
     // 常量池
     constants: Constants,
     // 操作数栈
-    stack: Vec<Rc<Object>>,
+    stack: Stack,
     // stack pointer
     sp: usize,
     // 全局变量
     globals: Globals,
     //栈帧
     frames: Vec<RCFrame>,
-    call_count: usize,
+    int_cache: Stack,
+    bool_cache_true: Rc<Object>,
+    bool_cache_false: Rc<Object>,
+    null_cache: Rc<Object>,
+    // call_count: usize,
     // add_times: u128,
     // call_times: u128,
-    times_spend_map: HashMap<u8, u128>,
-    tick_0: u128,
-    tick_1: u128,
-    tick_2: u128,
 }
 
 impl Vm {
@@ -53,9 +53,13 @@ impl Vm {
     }
     pub fn with_global_store(byte_code: ByteCode, globals: Globals) -> Self {
         let mut stack = Vec::with_capacity(STACK_SIZE);
-        let null = Rc::new(NULL);
+        let null_cache = Rc::new(NULL);
         for _ in 0..STACK_SIZE {
-            stack.push(null.clone())
+            stack.push(null_cache.clone())
+        }
+        let mut int_cache = Vec::with_capacity(MAX_INT_CACHE);
+        for i in 0..MAX_INT_CACHE {
+            int_cache.push(Rc::new(Object::Integer(i as i64)))
         }
         let main_fn = CompiledFunction::new(byte_code.instructions, 0, 0);
         let main_closure = Closure::new(main_fn, vec![]);
@@ -68,32 +72,31 @@ impl Vm {
             sp: 0,
             globals,
             frames,
-            // frame_index: 1,
-            call_count: 0,
-            // add_times: 0,
-            // call_times: 0,
-            times_spend_map: HashMap::new(),
-            tick_0: 0,
-            tick_1: 0,
-            tick_2: 0,
+            int_cache,
+            bool_cache_true: Rc::new(TRUE),
+            bool_cache_false: Rc::new(FALSE),
+            null_cache,
         }
     }
     pub fn run(&mut self) -> VmResult {
+        // let mut times_spend_record = std::collections::HashMap::new();
+        // tick_0: u128;
+        // tick_1: u128;
+        // tick_2: u128;
         // ip means instruction_pointer
         while self.current_frame().ip < self.current_frame().instructions().len() {
-            let start = Instant::now();
+            // let start = std::time::Instant::now();
             let ins = self.current_frame().instructions();
             let op_code = Opcode::from_byte(ins[self.frames.last().unwrap().ip]).unwrap();
-            // self.tick_0 += start.elapsed().as_nanos();
             //从操作码后面一个位置开始
-            self.frames.last_mut().unwrap().ip += 1;
+            self.current_frame_ip_inc(1);
             let ip = self.current_frame().ip;
             match op_code {
                 Opcode::Constant => {
                     let const_index = self.read_u16(&ins, ip);
-                    let constant = self.constants.borrow()[const_index].clone();
+                    let constant = Rc::clone(&self.constants.borrow()[const_index]);
                     self.push_stack(constant)?;
-                    self.frames.last_mut().unwrap().ip += 2;
+                    self.current_frame_ip_inc(2);
                 }
 
                 Opcode::Array => {
@@ -116,24 +119,24 @@ impl Vm {
                 }
 
                 Opcode::Add | Opcode::Sub | Opcode::Mul | Opcode::Div => {
-                    let result = self.execute_binary_operation(op_code)?;
+                    let result = self.execute_binary_operation(&op_code)?;
                     self.push_stack(result)?;
                 }
 
                 Opcode::Pop => {
-                    self.pop_stack()?;
+                    self.sp -= 1;
                 }
 
                 Opcode::True => {
-                    self.push_stack(Rc::new(TRUE))?;
+                    self.push_stack(self.bool_cache_true.clone())?;
                 }
                 Opcode::False => {
-                    self.push_stack(Rc::new(FALSE))?;
+                    self.push_stack(self.bool_cache_false.clone())?;
                 }
 
                 Opcode::Equal | Opcode::NotEqual | Opcode::GreaterThan | Opcode::LessThan => {
-                    let x = self.execute_comparison_operation(op_code)?;
-                    self.push_stack(x)?;
+                    let bool_object = self.execute_comparison_operation(&op_code)?;
+                    self.push_stack(bool_object)?;
                 }
 
                 Opcode::Neg => {
@@ -157,22 +160,24 @@ impl Vm {
                 }
                 Opcode::JumpIfNotTruthy => {
                     let is_truthy = self.pop_stack()?;
-                    if *is_truthy == TRUE {
-                        self.frames.last_mut().unwrap().ip += 2;
-                    } else {
-                        self.frames.last_mut().unwrap().ip = self.read_u16(&ins, ip);
+                    if let Object::Boolean(truthy) = *is_truthy {
+                        if truthy {
+                            self.current_frame_ip_inc(2);
+                        } else {
+                            self.frames.last_mut().unwrap().ip = self.read_u16(&ins, ip);
+                        }
                     }
                 }
 
                 Opcode::Null => {
-                    self.push_stack(Rc::new(NULL))?;
+                    self.push_stack(self.null_cache.clone())?;
                 }
 
                 Opcode::SetGlobal => {
-                    let (global_index, n) = self.read_usize(op_code, ip);
+                    let global_index = self.read_u16(&ins, ip);
                     let popped = self.pop_stack()?;
-                    self.set_global(global_index, popped)?;
-                    self.current_frame_ip_inc(n);
+                    self.set_global(global_index, popped);
+                    self.frames.last_mut().unwrap().ip += 2;
                 }
                 Opcode::GetGlobal => {
                     let global_index = self.read_u16(&ins, ip);
@@ -182,15 +187,14 @@ impl Vm {
                 }
 
                 Opcode::SetLocal => {
-                    let (local_index, n) = self.read_usize(op_code, ip);
-                    self.current_frame_ip_inc(n);
-                    let base_pointer = self.current_frame().base_pointer;
                     let popped = self.pop_stack()?;
-                    self.stack[base_pointer + local_index] = popped;
+                    let frame = self.frames.last_mut().unwrap();
+                    self.stack[frame.base_pointer + ins[ip] as usize] = popped;
+                    frame.ip += 2;
                 }
                 Opcode::GetLocal => {
                     // let start_0 = Instant::now();
-                    let mut frame = self.frames.last_mut().unwrap();
+                    let frame = self.frames.last_mut().unwrap();
                     // self.tick_0 += start_0.elapsed().as_nanos();
 
                     // let start_1 = Instant::now();
@@ -204,10 +208,9 @@ impl Vm {
                 }
 
                 Opcode::GetBuiltin => {
-                    let (built_index, n) = self.read_usize(op_code, ip);
-                    let builtin = self.get_builtin(built_index)?;
+                    let builtin = self.get_builtin(ins[ip] as usize)?;
                     self.push_stack(builtin)?;
-                    self.current_frame_ip_inc(n);
+                    self.current_frame_ip_inc(1);
                 }
 
                 Opcode::Closure => {
@@ -223,7 +226,8 @@ impl Vm {
                             let free_object = &self.stack[self.sp - free_num + i];
                             frees.push(free_object.clone()); //存引用
                         }
-                        let closure = Object::Closure(Closure::new(compiled_function.clone(), frees));
+                        let closure =
+                            Object::Closure(Closure::new(compiled_function.clone(), frees));
                         self.push_stack(Rc::new(closure))?;
                     } else {
                         return Err(RuntimeError::NotFunction(Object::clone(func_object)));
@@ -245,12 +249,9 @@ impl Vm {
                 }
 
                 Opcode::Call => {
-                    // let start = Instant::now();
                     let arg_nums = ins[ip] as usize;
-                    // let (arg_nums, n) = self.read_usize(op_code, ip);
                     self.current_frame_ip_inc(1);
                     self.call_function(arg_nums)?;
-                    // self.call_times += start.elapsed().as_nanos();
                 }
                 Opcode::ReturnValue => {
                     let return_value = self.pop_stack()?; //pop ret_val
@@ -261,44 +262,37 @@ impl Vm {
                 Opcode::Return => {
                     let base_pointer = self.pop_frame().base_pointer; // quit cur env
                     self.sp = base_pointer - 1;
-                    self.push_stack(Rc::new(NULL))?;
+                    self.push_stack(self.null_cache.clone())?;
                 }
                 _ => return Err(RuntimeError::UnKnownOpCode(op_code)),
             }
-            let k = op_code as u8;
-            let mut nv = start.elapsed().as_nanos();
-            if self.times_spend_map.contains_key(&k) {
-                let ov = self.times_spend_map.get(&k).unwrap();
-                nv += ov;
-            }
-            self.times_spend_map.insert(k, nv);
+            // let k = op_code as u8;
+            // let mut nv = start.elapsed().as_nanos();
+            // if times_spend_record.contains_key(&k) {
+            //     let ov = times_spend_record.get(&k).unwrap();
+            //     nv += ov;
+            // }
+            // times_spend_record.insert(k, nv);
         }
-        println!("call count: {}", self.call_count);
-        // println!("frame count: {}", self.frames.len());
+        // println!("call count: {}", self.call_count);
+        // let t = 1_000_000;
         // println!(
-        //     "add_times: {:?}",
-        //     Duration::from_nanos(self.add_times as u64)
+        //     "sum: {}, t0: {}, t1: {}, t2: {}",
+        //     (tick_0 + tick_1 + tick_2) / t,
+        //     tick_0 / t,
+        //     tick_1 / t,
+        //     tick_2 / t
         // );
-        // println!(
-        //     "call_times: {:?}",
-        //     Duration::from_nanos(self.call_times as u64)
-        // );
-        // self.times_spend_map.iter().map(|k,v|)
-        let t = 1_000_000;
-        println!(
-            "sum: {}, t0: {}, t1: {}, t2: {}",
-            (self.tick_0 + self.tick_1 + self.tick_2) / t,
-            self.tick_0 / t,
-            self.tick_1 / t,
-            self.tick_2 / t
-        );
-        let mut map = BTreeMap::new();
-        for (k, v) in self.times_spend_map.iter() {
-            let op = Opcode::from_byte(*k);
-            map.insert(Duration::from_nanos(*v as u64), op.unwrap());
-            // println!("{:?} ==> {:?}", op, Duration::from_nanos(*v as u64));
-        }
-        println!("{:#?}", map.iter());
+        // let mut map = std::collections::BTreeMap::new();
+        // let mut all = 0.0;
+        // for (k, v) in times_spend_record.iter() {
+        //     let op = Opcode::from_byte(*k);
+        //     all += *v as f64 / 1_000_000.0;
+        //     map.insert(std::time::Duration::from_nanos(*v as u64), op.unwrap());
+        //     // println!("{:?} ==> {:?}", op, Duration::from_nanos(*v as u64));
+        // }
+        // println!("{:#?}", map.iter());
+        // println!("解析运行指令用时: {}", all);
         // println!("times spend map: \n {:#?}", self.times_spend_map);
         self.last_popped_stack_element()
     }
