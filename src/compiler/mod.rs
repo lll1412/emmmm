@@ -6,18 +6,18 @@ use crate::compiler::symbol_table::{Symbol, SymbolScope, SymbolTable};
 use crate::core::base::ast::{
     BinaryOperator, BlockStatement, Expression, Program, Statement, UnaryOperator,
 };
-use crate::object::builtins::BUILTINS;
 use crate::create_rc_ref_cell;
-use crate::object::{Object, CompiledFunction};
+use crate::object::builtins::BUILTINS;
+use crate::object::{CompiledFunction, Object};
 
 pub mod code;
 pub mod symbol_table;
 mod test;
 
 type CompileResult<T = ()> = std::result::Result<T, CompileError>;
-pub type Constants = Rc<RefCell<Vec<Rc<Object>>>>;
+pub type Constants = Vec<Rc<Object>>;
 pub type RcSymbolTable = Rc<RefCell<SymbolTable>>;
-
+const CONSTANT_CAPACITY: usize = 0xFFFF;
 #[derive(Debug, Clone)]
 pub struct Compiler {
     constants: Constants,
@@ -97,7 +97,8 @@ impl EmittedInstruction {
 impl Compiler {
     pub fn new() -> Self {
         let symbol_table = create_rc_ref_cell(SymbolTable::new());
-        let constants = create_rc_ref_cell(vec![]);
+        // let constants = create_rc_ref_cell(vec![]);
+        let constants = Vec::with_capacity(CONSTANT_CAPACITY);
         Compiler::with_state(symbol_table, constants)
     }
     pub fn with_state(symbol_table: RcSymbolTable, constants: Constants) -> Self {
@@ -121,7 +122,10 @@ impl Compiler {
         Ok(self.bytecode())
     }
     pub fn bytecode(&mut self) -> ByteCode {
-        ByteCode::new(self.cur_instruction().clone(), Constants::clone(&self.constants))
+        ByteCode::new(
+            self.cur_instruction().clone(),
+            Constants::clone(&self.constants),
+        )
     }
     fn enter_scope(&mut self) {
         //当前作用域
@@ -190,8 +194,7 @@ impl Compiler {
     fn compile_expression(&mut self, expression: &Expression) -> CompileResult {
         match expression {
             Expression::IntLiteral(value) => {
-                let i = self.add_constant(Object::Integer(*value));
-                self.emit(Opcode::Constant, vec![i]);
+                self.add_constant_one_and_emit(Object::Integer(*value));
             }
             Expression::BoolLiteral(bool) => {
                 if *bool {
@@ -201,8 +204,7 @@ impl Compiler {
                 }
             }
             Expression::StringLiteral(string) => {
-                let i = self.add_constant(Object::String(string.to_string()));
-                self.emit(Opcode::Constant, vec![i]);
+                self.add_constant_one_and_emit(Object::String(string.to_string()));
             }
             Expression::ArrayLiteral(items) => {
                 for item in items {
@@ -336,10 +338,10 @@ impl Compiler {
                 for name in frees {
                     self.load_symbol(name)?; // emit free
                 }
-                let constant = Object::CompiledFunction(CompiledFunction{
+                let constant = Object::CompiledFunction(CompiledFunction {
                     insts: Rc::new(compiled_fn),
                     num_locals,
-                    num_parameters: args.len()
+                    num_parameters: args.len(),
                 });
                 let const_index = self.add_constant(constant);
                 //函数常量索引
@@ -401,8 +403,31 @@ impl Compiler {
     }
     /// 常量池添加常量，返回常量索引
     fn add_constant(&mut self, constant: Object) -> usize {
-        self.constants.borrow_mut().push(Rc::new(constant));
-        self.constants.borrow().len() - 1
+        self.constants.push(Rc::new(constant));
+        self.constants.len() - 1
+    }
+    //在一字节范围的常量
+    fn add_constant_one_and_emit(&mut self, constant: Object) {
+        self.constants.push(Rc::new(constant));
+        let i = self.constants.len();
+        if i <= 0xF {
+            let mut o = vec![];
+            let op = match i {
+                1 => Opcode::Constant0,
+                2 => Opcode::Constant1,
+                3 => Opcode::Constant2,
+                4 => Opcode::Constant3,
+                5 => Opcode::Constant4,
+                i => {
+                    o = vec![i - 1];
+                    Opcode::ConstantOne
+                },
+            };
+            self.emit(op, o);
+        } else {
+            self.emit(Opcode::Constant, vec![i - 1]);
+        }
+        // self.constants.len() - 1
     }
     /// 指令表添加指令，返回指令开始位置
     fn add_instruction(&mut self, instruction: &mut Instructions) -> usize {
@@ -460,7 +485,23 @@ impl Compiler {
         };
         let op = match symbol.scope {
             SymbolScope::Global => Opcode::GetGlobal,
-            SymbolScope::Local => Opcode::GetLocal,
+            SymbolScope::Local => {
+                let i = symbol.index;
+                let mut o = vec![];
+                let op = match i {
+                    0 => Opcode::GetLocal0,
+                    1 => Opcode::GetLocal1,
+                    2 => Opcode::GetLocal2,
+                    3 => Opcode::GetLocal3,
+                    4 => Opcode::GetLocal4,
+                    _ => {
+                        o = vec![i];
+                        Opcode::GetLocal
+                    }
+                };
+                self.emit(op, o);
+                return Ok(());
+            }
             SymbolScope::Builtin => Opcode::GetBuiltin,
             SymbolScope::Free => Opcode::GetFree,
         };
@@ -469,12 +510,28 @@ impl Compiler {
     }
     //
     fn store_symbol(&mut self, symbol: Rc<Symbol>) {
-        let op = match symbol.scope {
-            SymbolScope::Global => Opcode::SetGlobal,
-            SymbolScope::Local => Opcode::SetLocal,
+        match symbol.scope {
+            SymbolScope::Global => {
+                self.emit(Opcode::SetGlobal, vec![symbol.index]);
+            },
+            SymbolScope::Local => {
+                let i = symbol.index;
+                let mut o = vec![];
+                let op = match i {
+                    0 => Opcode::SetLocal0,
+                    1 => Opcode::SetLocal1,
+                    2 => Opcode::SetLocal2,
+                    3 => Opcode::SetLocal3,
+                    4 => Opcode::SetLocal4,
+                    _ => {
+                        o = vec![i];
+                        Opcode::SetLocal
+                    }
+                };
+                self.emit(op, o);
+            },
             _ => unimplemented!(),
         };
-        self.emit(op, vec![symbol.index]);
     }
 
     fn symbol_table_len(&self) -> usize {
@@ -492,7 +549,7 @@ impl Compiler {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ByteCode {
     pub instructions: Instructions,
     pub constants: Constants,

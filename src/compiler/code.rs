@@ -52,6 +52,12 @@ op_build!(
     [
         // 常量
         Constant(2),
+        Constant0(),// const_index = 0..4
+        Constant1(),
+        Constant2(),
+        Constant3(),
+        Constant4(),
+        ConstantOne(1),//一字节
         // 数组
         Array(2),
         // Hash
@@ -83,7 +89,18 @@ op_build!(
         GetGlobal(2),
         //局部变量
         SetLocal(1),
+        SetLocal0(),// set_local = 0..4
+        SetLocal1(),
+        SetLocal2(),
+        SetLocal3(),
+        SetLocal4(),
+
         GetLocal(1),
+        GetLocal0(),// get_local = 0..4
+        GetLocal1(),
+        GetLocal2(),
+        GetLocal3(),
+        GetLocal4(),
         //内置函数
         GetBuiltin(1),
         Closure(2, 1),
@@ -190,7 +207,7 @@ pub fn _make_noop(op_code: Opcode) -> Instructions {
 }
 
 /// # 打印指令
-pub fn _print_instructions(instructions: &Instructions) -> String {
+pub fn print_instructions(instructions: &Instructions) -> String {
     let mut pc = 0;
     let mut string = String::new();
     while pc < instructions.len() {
@@ -202,15 +219,15 @@ pub fn _print_instructions(instructions: &Instructions) -> String {
                 let definition = op_code.definition();
                 let operand_count = definition.operand_width.len(); //操作数 数量
                 string.push_str(&format!(
-                    "{pc:04} {operator}({op})",
+                    "{pc:4} {operator}",
                     pc = pc,
                     operator = definition.name,
-                    op = op_code as u8
+                    // op = op_code as u8
                 ));
                 for k in 0..operand_count {
                     let instruction_len = definition.operand_width[k]; //指令长度
                     let operand = read_usize(&instructions[pc + 1..], instruction_len);
-                    string.push_str(&format!(" {operand:>02X}", operand = operand));
+                    string.push_str(&format!(" {operand:02}", operand = operand));
                     pc += instruction_len;
                 }
                 string.push('\n');

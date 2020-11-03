@@ -233,7 +233,7 @@ mod tests {
             ),
             (
                 r"
-            let oneAndTwo = fn() { 
+            let oneAndTwo = fn() {
                 let one = 1;
                 let two = 2;
                 return one + two;
@@ -423,7 +423,6 @@ mod tests {
             ("if 1>2 { 10 }", Object::Null),
             ("if true { 10 }", Object::Integer(10)),
             ("if true { 10 } else { 20 }", Object::Integer(10)),
-            ("if 1 { 10 }", Object::Integer(10)),
             ("if 1<2 { 10 }", Object::Integer(10)),
             ("if 1>2 { 10 } else { 20 }", Object::Integer(20)),
         ];
@@ -481,7 +480,7 @@ mod tests {
             let mut compiler = Compiler::new();
             match compiler.compile(&program) {
                 Ok(byte_code) => {
-                    let mut vm = Vm::new(byte_code);
+                    let mut vm = Vm::new(byte_code.clone());
                     let start = Instant::now();
                     match vm.run() {
                         Ok(object) => {
@@ -494,7 +493,14 @@ mod tests {
                             );
                             test_expected_object(input, &object, &expected);
                         }
-                        Err(e) => panic!("Input: {}\nRuntime Error: {:?}", input, e),
+                        Err(e) => {
+                            let cs = &byte_code.constants;
+                            for x in cs.iter() {
+                                println!("-----");
+                                println!("{}", x);
+                            }
+                            panic!("Input: {}\nRuntime Error: {:?}", input, e)
+                        },
                     };
                 }
                 Err(e) => panic!("Input: {}\nCompile Error: {:?}", input, e),

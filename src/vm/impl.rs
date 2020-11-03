@@ -5,7 +5,7 @@ use std::rc::Rc;
 use crate::compiler::code::{Opcode, read_operands};
 use crate::object::{HashKey, Object, RuntimeError};
 use crate::object::builtins::BUILTINS;
-use crate::vm::{FALSE, NULL, RCFrame, TRUE, Vm, VmResult};
+use crate::vm::{FALSE, NULL, TRUE, Vm, VmResult};
 use crate::vm::frame::Frame;
 
 impl Vm {
@@ -258,18 +258,16 @@ impl Vm {
 
     /// # 存入全局变量
     pub fn set_global(&mut self, global_index: usize, global: Rc<Object>) {
-        let mut globals = self.globals.borrow_mut();
-        if global_index == globals.len() {
-            globals.push(global);
+        if global_index == self.globals.len() {
+            self.globals.push(global);
         } else {
-            globals[global_index] = global;
+            self.globals[global_index] = global;
         }
     }
     /// # 取出全局变量
     pub fn get_global(&self, global_index: usize) -> VmResult {
-        let globals = self.globals.borrow();
-        let option = &globals[global_index];
-        Ok(option.clone())
+        let object = self.globals[global_index].clone();
+        Ok(object)
     }
     pub fn get_builtin(&self, builtin_index: usize) -> VmResult {
         let builtin_fun = &BUILTINS[builtin_index];
@@ -277,37 +275,29 @@ impl Vm {
     }
     /// # 最后弹出栈顶的元素
     pub fn last_popped_stack_element(&self) -> VmResult {
-        if self.sp >= self.stack.len() {
-            Err(RuntimeError::ArrayOutOfBound {
-                len: self.stack.len(),
-                index: self.sp,
-            })
-        } else {
-            let object = &self.stack[self.sp];
-            Ok(object.clone())
-        }
+        // if self.sp >= self.stack.len() {
+        //     Err(RuntimeError::ArrayOutOfBound {
+        //         len: self.stack.len(),
+        //         index: self.sp,
+        //     })
+        // } else {
+        let object = &self.stack[self.sp];
+        Ok(object.clone())
+        // }
     }
     pub fn get_const_object(&self, index: usize) -> Rc<Object> {
-        self.constants.borrow()[index].clone()
+        self.constants[index].clone()
     }
-    #[inline]
     pub fn current_frame_ip_inc(&mut self, n: usize) {
         self.frames.last_mut().unwrap().ip += n;
     }
-    pub fn _current_frame_inc_and_get(&mut self, n: usize) -> usize {
-        self.frames.last_mut().unwrap().ip += n;
-        self.current_frame().ip
-    }
-    pub fn _set_current_frame_ip(&mut self, n: usize) {
-        self.frames.last_mut().unwrap().ip = n;
-    }
-    pub fn current_frame(&self) -> &RCFrame {
+    pub fn current_frame(&self) -> &Frame {
         &self.frames.last().unwrap()
     }
-    pub fn push_frame(&mut self, frame: RCFrame) {
+    pub fn push_frame(&mut self, frame: Frame) {
         self.frames.push(frame);
     }
-    pub fn pop_frame(&mut self) -> RCFrame {
+    pub fn pop_frame(&mut self) -> Frame {
         self.frames.pop().unwrap()
     }
 }

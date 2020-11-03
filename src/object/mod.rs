@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::fmt::{Display, Formatter, Result};
 use std::rc::Rc;
 
-use crate::compiler::code::{_print_instructions, Instructions, Opcode};
+use crate::compiler::code::{print_instructions, Instructions, Opcode};
 use crate::core::base::ast::{BinaryOperator, BlockStatement, Expression, UnaryOperator};
 use crate::eval::evaluator::EvalResult;
 use crate::object::environment::Environment;
@@ -209,7 +209,7 @@ impl Object {
     fn type_name(&self) -> &str {
         match self {
             Object::Integer(_) => "INTEGER",
-            Object::_Float(_) => "FLOAT",
+            // Object::_Float(_) => "FLOAT",
             Object::Boolean(_) => "BOOLEAN",
             Object::String(_) => "STRING",
             Object::Array(_) => "ARRAY",
@@ -255,9 +255,9 @@ impl Display for Object {
                 write!(f, "{{{map}}}", map = x)
             }
             Object::CompiledFunction(cf) => {
-                write!(f, "{}", _print_instructions(&cf.insts))
+                write!(f, "{}", print_instructions(&cf.insts))
             }
-            Object::Closure(cl) => write!(f, "{}", _print_instructions(&cl.compiled_function.insts)),
+            Object::Closure(cl) => write!(f, "{}", print_instructions(&cl.compiled_function.insts)),
         }
     }
 }

@@ -15,7 +15,8 @@ pub fn benchmark(engine: Engine) {
     // no optimized, n = 21, takes 10s.
     // optimized 1, n = 30, takes 2s.
     // optimized 2, n = 35, takes 7.8s.
-    // optimized 3, n = 35, takes 3.4s.
+    // optimized 3, n = 35, takes 3.4s.//rust更新1.47之后变4.4s了
+    // optimized 4, n = 35, takes 3.35s
     let n = 35;
     let code = &format!(
         r"let fibonacci = fn(x) {{
@@ -25,7 +26,8 @@ pub fn benchmark(engine: Engine) {
                  fibonacci(x - 1) + fibonacci(x - 2)
              }}
          }};
-         fibonacci({});",
+         fibonacci({})
+         ",
         n
     );
 
@@ -41,15 +43,25 @@ pub fn benchmark(engine: Engine) {
         Engine::Compile => {
             let mut compiler = Compiler::new();
             let byte_code = compiler.compile(&program).expect("compile error");
-            // let cs = &byte_code.constants;
-            // for x in cs.borrow().iter() {
-            //     println!("-----");
-            //     println!("{}", x);
-            // }
+            let cs = &byte_code.constants;
+            for x in cs.iter() {
+                println!("-----");
+                println!("{}", x);
+            }
             let mut vm = Vm::new(byte_code);
             start = Instant::now();
-            let result = vm.run().expect("runtime error");
-            Object::clone(&result)
+            let r = match vm.run() {
+                Ok(result) => {
+                    result
+                },
+                Err(err) => {
+                    println!("err: {}", err);
+                    Rc::new(Object::Null)
+                },
+            };
+            Object::clone(&r)
+            // let result = vm.run().expect("runtime error");
+            // Object::clone(&result)
         }
     };
     let duration = start.elapsed();
