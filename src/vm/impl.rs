@@ -2,13 +2,20 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use crate::compiler::code::{Opcode, read_operands};
+use crate::compiler::code::{Opcode, read_operands, Instructions};
 use crate::object::{HashKey, Object, RuntimeError};
 use crate::object::builtins::BUILTINS;
 use crate::vm::{FALSE, NULL, TRUE, Vm, VmResult};
 use crate::vm::frame::Frame;
 
 impl Vm {
+    pub fn jump_if(&mut self, truthy: bool, ins: &Instructions, ip: usize) {
+        if truthy {
+            self.frames.last_mut().unwrap().ip += 2;
+        } else {
+            self.frames.last_mut().unwrap().ip = self.read_u16(ins, ip);
+        }
+    }
     /// # 执行非运算
     pub fn execute_not_expression(&mut self, value: &Object) -> VmResult<()> {
         if *value == TRUE {
@@ -46,8 +53,7 @@ impl Vm {
             Object::Hash(pairs) => {
                 let val = &self.pop_stack()?;
                 let index = &self.pop_stack()?;
-                let key = HashKey::from_object(index)
-                    .map_err(|err| RuntimeError::CustomErrMsg(err.to_string()))?;
+                let key = HashKey::from_object(index)?;
                 pairs.borrow_mut().insert(key, Object::clone(val));
             }
             //普通赋值
@@ -75,8 +81,7 @@ impl Vm {
         while i < self.sp {
             let k = &self.stack[i];
             let v = &self.stack[i + 1];
-            let key = HashKey::from_object(k)
-                .map_err(|err| RuntimeError::CustomErrMsg(err.to_string()))?;
+            let key = HashKey::from_object(k)?;
             hash.insert(key, Object::clone(v));
             i += 2;
         }
@@ -136,8 +141,7 @@ impl Vm {
                 return Ok(Rc::new(value));
             }
         } else if let Object::Hash(pairs) = obj {
-            let key = HashKey::from_object(index)
-                .map_err(|err| RuntimeError::CustomErrMsg(err.to_string()))?;
+            let key = HashKey::from_object(index)?;
             let value = pairs.borrow().get(&key).cloned().unwrap_or(NULL);
             return Ok(Rc::new(value));
         }
@@ -204,7 +208,7 @@ impl Vm {
                     let rc = &self.stack[self.sp + i];
                     v.push(Object::clone(rc));
                 }
-                let r = builtin_fun(v).map_err(|e| RuntimeError::CustomErrMsg(e.to_string()))?;
+                let r = builtin_fun(v)?;
                 self.push_stack(Rc::new(r))?;
             }
             _ => {

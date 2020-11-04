@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
-use crate::compiler::{ByteCode, Constants};
 use crate::compiler::code::Opcode;
+use crate::compiler::{ByteCode, Constants};
 use crate::object::{Closure, CompiledFunction, Object, RuntimeError};
 use crate::vm::frame::Frame;
 
@@ -181,14 +181,24 @@ impl Vm {
                 Opcode::JumpAlways => {
                     self.frames.last_mut().unwrap().ip = self.read_u16(&ins, ip);
                 }
+                Opcode::JumpIfLess => {
+                    let right = self.pop_stack()?;
+                    let left = self.pop_stack()?;
+                    match (&*left, &*right) {
+                        (Object::Integer(l), Object::Integer(r)) => {
+                            self.jump_if(l < r, &ins, ip);
+                        }
+                        _ => {
+                            return Err(RuntimeError::CustomErrMsg(
+                                "unsupported compare".to_string(),
+                            ))
+                        }
+                    }
+                }
                 Opcode::JumpIfNotTruthy => {
                     let is_truthy = self.pop_stack()?;
                     if let Object::Boolean(truthy) = *is_truthy {
-                        if truthy {
-                            self.frames.last_mut().unwrap().ip += 2;
-                        } else {
-                            self.frames.last_mut().unwrap().ip = self.read_u16(&ins, ip);
-                        }
+                        self.jump_if(truthy, &ins, ip);
                     }
                 }
 
@@ -207,6 +217,26 @@ impl Vm {
                     let object = self.get_global(global_index)?;
                     self.push_stack(object)?;
                     self.current_frame_ip_inc(2);
+                }
+                Opcode::GetGlobal0 => {
+                    let object = self.globals[0].clone();
+                    self.push_stack(object)?;
+                }
+                Opcode::GetGlobal1 => {
+                    let object = self.globals[1].clone();
+                    self.push_stack(object)?;
+                }
+                Opcode::GetGlobal2 => {
+                    let object = self.globals[2].clone();
+                    self.push_stack(object)?;
+                }
+                Opcode::GetGlobal3 => {
+                    let object = self.globals[3].clone();
+                    self.push_stack(object)?;
+                }
+                Opcode::GetGlobal4 => {
+                    let object = self.globals[4].clone();
+                    self.push_stack(object)?;
                 }
 
                 Opcode::SetLocal => {

@@ -7,8 +7,8 @@ use crate::core::base::ast::{
     BinaryOperator, BlockStatement, Expression, Program, Statement, UnaryOperator,
 };
 use crate::create_rc_ref_cell;
-use crate::object::builtins::BUILTINS;
 use crate::object::{CompiledFunction, Object};
+use crate::object::builtins::BUILTINS;
 
 pub mod code;
 pub mod symbol_table;
@@ -269,8 +269,17 @@ impl Compiler {
             }
             Expression::If(cond, cons, alt) => {
                 self.compile_expression(cond)?;
+                let jump_if_pos;
+                if self.last_instruction_is(Opcode::LessThan) {
+                    //如果是小于比较运算
+                    self.remove_last_instruction()?; //移除小于指令
+                    jump_if_pos = self.emit(Opcode::JumpIfLess, vec![9999]); //替换指令
+                } else {
+                    //不变
+                    jump_if_pos = self.emit(Opcode::JumpIfNotTruthy, vec![9999]);
+                }
                 //条件不成立跳转的位置
-                let jump_if_not_truthy_pos = self.emit(Opcode::JumpIfNotTruthy, vec![9999]);
+                // let jump_if_not_truthy_pos = self.emit(Opcode::JumpIfNotTruthy, vec![9999]);
                 self.compile_block_statement(cons)?;
                 // if语句是一个表达式有pop,
                 // 编译语句块之后会多一个pop,
@@ -283,7 +292,7 @@ impl Compiler {
                 let jump_always_pos = self.emit(Opcode::JumpAlways, vec![9999]);
                 //将条件不成立跳转位置设定为当前位置
                 let after_cons_pos = self.cur_instruction_len();
-                self.change_operand(jump_if_not_truthy_pos, after_cons_pos);
+                self.change_operand(jump_if_pos, after_cons_pos);
                 // 如果有else语句块
                 if let Some(alt) = alt {
                     self.compile_block_statement(alt)?;
@@ -421,7 +430,7 @@ impl Compiler {
                 i => {
                     o = vec![i - 1];
                     Opcode::ConstantOne
-                },
+                }
             };
             self.emit(op, o);
         } else {
@@ -484,7 +493,23 @@ impl Compiler {
             Some(symbol) => symbol,
         };
         let op = match symbol.scope {
-            SymbolScope::Global => Opcode::GetGlobal,
+            SymbolScope::Global => {
+                let i = symbol.index;
+                let mut o = vec![];
+                let op = match i {
+                    0 => Opcode::GetGlobal0,
+                    1 => Opcode::GetGlobal1,
+                    2 => Opcode::GetGlobal2,
+                    3 => Opcode::GetGlobal3,
+                    4 => Opcode::GetGlobal4,
+                    _ => {
+                        o = vec![i];
+                        Opcode::GetGlobal
+                    }
+                };
+                self.emit(op, o);
+                return Ok(());
+            }
             SymbolScope::Local => {
                 let i = symbol.index;
                 let mut o = vec![];
@@ -513,7 +538,7 @@ impl Compiler {
         match symbol.scope {
             SymbolScope::Global => {
                 self.emit(Opcode::SetGlobal, vec![symbol.index]);
-            },
+            }
             SymbolScope::Local => {
                 let i = symbol.index;
                 let mut o = vec![];
@@ -529,7 +554,7 @@ impl Compiler {
                     }
                 };
                 self.emit(op, o);
-            },
+            }
             _ => unimplemented!(),
         };
     }

@@ -83,10 +83,17 @@ op_build!(
         Not(),
         //跳转指令
         JumpIfNotTruthy(2),
+        JumpIfLess(2),
+        // JumpIfNotEq(2),
         JumpAlways(2),
         //全局变量绑定
         SetGlobal(2),
         GetGlobal(2),
+        GetGlobal0(),
+        GetGlobal1(),
+        GetGlobal2(),
+        GetGlobal3(),
+        GetGlobal4(),
         //局部变量
         SetLocal(1),
         SetLocal0(),// set_local = 0..4
