@@ -7,6 +7,44 @@ mod tests {
     use crate::core::{base::ast::*, lexer::*, parser::Parser};
 
     #[test]
+    fn for_statement() {
+        let inputs = &[
+            (
+                r#"for (let i = 1; i < 2; i = i + 1){}"#,
+                Statement::For(
+                    Some(Box::new(Statement::Let(
+                        "i".to_string(),
+                        Expression::IntLiteral(1),
+                    ))),
+                    Some(Expression::Binary(
+                        BinaryOperator::Lt,
+                        Box::new(Expression::Identifier("i".to_string())),
+                        Box::new(Expression::IntLiteral(2)),
+                    )),
+                    Some(Expression::Binary(
+                        BinaryOperator::Assign,
+                        Box::new(Expression::Identifier("i".to_string())),
+                        Box::new(Expression::Binary(
+                            BinaryOperator::Plus,
+                            Box::new(Expression::Identifier("i".to_string())),
+                            Box::new(Expression::IntLiteral(1)),
+                        )),
+                    )),
+                    BlockStatement { statements: vec![] },
+                ),
+            ),
+            (
+                r#"
+            for (let i = 0; i < 10; i = i + 1) {
+                r = r + 1;
+            }
+        "#,
+                Statement::Comment("".to_string()),
+            ),
+        ];
+        test_parse_statement_str(inputs);
+    }
+    #[test]
     fn test_something() {
         let inputs = "let add = fn(a,b) { a + b; }; add(2,4);";
         let mut parser = Parser::from(inputs);
@@ -119,6 +157,15 @@ mod tests {
     }
 
     fn test_parse_str(data: &[(&str, Expression)]) {
+        for (input, expected) in data {
+            let mut parser = Parser::from(input);
+            let program = parser.parse_program();
+            check_parser_error(parser);
+            assert_eq!(program.to_string(), expected.to_string());
+        }
+    }
+
+    fn test_parse_statement_str(data: &[(&str, Statement)]) {
         for (input, expected) in data {
             let mut parser = Parser::from(input);
             let program = parser.parse_program();

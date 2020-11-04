@@ -37,9 +37,39 @@ fn eval_statement(statement: &Statement, env: Env) -> EvalResult {
         }
         Statement::Expression(expr) => eval_expression(expr, Rc::clone(&env)),
         Statement::Comment(comment) => Ok(Object::String(comment.to_string())),
+        Statement::For(init, cond, after, blocks) => {
+            eval_for_statement(init, cond, after, blocks, Rc::clone(&env))
+        }
     }
 }
-
+/// for循环求值
+fn eval_for_statement(
+    init: &Option<Box<Statement>>,
+    cond: &Option<Expression>,
+    after: &Option<Expression>,
+    blocks: &BlockStatement,
+    env: Env,
+) -> EvalResult {
+    if let Some(init) = init.as_deref() {
+        eval_statement(init, Rc::clone(&env))?;
+    }
+    loop {
+        if let Some(cond) = cond {
+            let cond_obj = eval_expression(cond, Rc::clone(&env))?;
+            if let Object::Boolean(b) = cond_obj {
+                if b {
+                    eval_block_statements(blocks, Rc::clone(&env))?;
+                } else {
+                    break;
+                }
+            }
+        }
+        if let Some(after) = after {
+            eval_expression(after, Rc::clone(&env))?;
+        }
+    }
+    Ok(Object::Null)
+}
 /// ## 多条语句求值
 fn eval_statements(statements: &[Statement], env: Env) -> EvalResult {
     let mut result = Object::Null;

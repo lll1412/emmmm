@@ -12,7 +12,20 @@ mod tests {
     use std::collections::HashMap;
     use std::fmt::{Debug, Display};
     use std::rc::Rc;
-
+    #[test]
+    fn for_statement() {
+        let inputs = [(
+            r#"
+            let r = 0;
+            for (let i = 0; i < 10; i = i + 1) {
+                r = r + 1;
+            }
+            r
+        "#,
+            Object::Integer(10),
+        )];
+        check_input(&inputs);
+    }
     #[test]
     fn test_hash() {
         let mut map = HashMap::new();

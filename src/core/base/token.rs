@@ -71,6 +71,8 @@ pub enum Token {
     False,
     /// if
     If,
+    /// for
+    For,
     /// else
     Else,
     /// return
@@ -85,6 +87,7 @@ impl Token {
             "true" => Token::True,
             "false" => Token::False,
             "if" => Token::If,
+            "for" => Token::For,
             "else" => Token::Else,
             "return" => Token::Return,
             id => Token::Ident(id.to_string()),
@@ -129,7 +132,8 @@ impl fmt::Display for Token {
             Token::If => write!(f, "if"),
             Token::Else => write!(f, "else"),
             Token::Return => write!(f, "return"),
-            Token::Comment(comment) => write!(f, "// {}", comment)
+            Token::Comment(comment) => write!(f, "// {}", comment),
+            Token::For => write!(f, "for"),
         }
     }
 }

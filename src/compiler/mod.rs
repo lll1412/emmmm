@@ -181,6 +181,9 @@ impl Compiler {
             Statement::Comment(_comment) => {
                 //todo ignore comment
             }
+            Statement::For(init, cond, after, blocks) => {
+                panic!()
+            }
         }
         Ok(())
     }

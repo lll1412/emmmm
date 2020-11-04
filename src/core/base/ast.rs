@@ -27,6 +27,13 @@ pub enum Statement {
     // return
     Return(Option<Expression>),
     Comment(String),
+    // for (init; cond; after) { block }
+    For(
+        Option<Box<Statement>>, // init
+        Option<Expression>,     // cond
+        Option<Expression>,     // after
+        BlockStatement,         // blocks
+    ),
     //
     Expression(Expression),
 }
@@ -124,6 +131,24 @@ impl Display for Statement {
             Statement::Expression(exp) => write!(f, "{}", exp),
             // Statement::For(_, _, _, _) => write!(f, ""),
             Statement::Comment(comment) => write!(f, "// {}", comment),
+            Statement::For(init, cond, after, blocks) => write!(
+                f,
+                r"for ({}; {}; {}) {}",
+                init.clone()
+                    .unwrap_or_else(|| Box::new(Statement::Expression(Expression::StringLiteral(
+                        "".to_string()
+                    )))),
+                cond.clone()
+                    .unwrap_or_else(|| Expression::StringLiteral("".to_string())),
+                after
+                    .clone()
+                    .unwrap_or_else(|| Expression::StringLiteral("".to_string())),
+                if blocks.statements.is_empty() {
+                    String::from("{ {} }")
+                } else {
+                    blocks.to_string()
+                }
+            ),
         }
     }
 }

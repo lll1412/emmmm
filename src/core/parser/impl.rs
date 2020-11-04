@@ -1,10 +1,10 @@
-use crate::core::base::ast::BlockStatement;
 use crate::core::{
     base::ast::{BinaryOperator, Expression, Program, Statement, UnaryOperator},
     base::token::Token,
     lexer::Lexer,
-    parser::{BinaryParseFn, ParseResult, Parser, ParserError, Precedence, UnaryParseFn},
+    parser::{BinaryParseFn, Parser, ParserError, ParseResult, Precedence, UnaryParseFn},
 };
+use crate::core::base::ast::BlockStatement;
 
 impl Parser {
     // 从Lexer构建Parser
@@ -47,6 +47,7 @@ impl Parser {
             Token::Let => self.parse_let_statement(),
             Token::Return => self.parse_return_statement(),
             Token::Comment(comment) => Ok(Statement::Comment(comment.to_string())),
+            Token::For => self.parse_for_statement(),
             _ => self.parse_expression_statement(),
         }
     }
@@ -90,6 +91,34 @@ impl Parser {
             self.next_token(); //eat ;
         }
         Ok(Statement::Return(option))
+    }
+    /// 解析for语句
+    /// for (init; cond; after) { block_statement }
+    fn parse_for_statement(&mut self) -> ParseResult<Statement> {
+        self.next_token();
+        let mut init = None;
+        if self.peek_token != Token::Semicolon {
+            self.next_token();
+            init = Some(Box::new(self.parse_let_statement()?));
+        }
+        self.next_token();
+        let mut cond = None;
+        if self.peek_token != Token::Semicolon {
+            cond = Some(self.parse_expression(Precedence::Lowest)?);
+        }
+        self.next_token();
+        let mut after = None;
+        if self.peek_token != Token::Rparen {
+            self.next_token();
+            after = Some(self.parse_expression(Precedence::Lowest)?);
+        }
+        self.next_token();
+        if self.peek_token != Token::Rbrace {
+            self.next_token();
+        }
+        let blocks = self.parse_block_statement()?;
+        let for_statement = Statement::For(init, cond, after, blocks);
+        Ok(for_statement)
     }
     /// 解析表达式语句
     ///
