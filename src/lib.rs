@@ -1,5 +1,5 @@
 use crate::compiler::{Compiler, Constants, RcSymbolTable};
-use crate::core::base::ast::Program;
+use crate::parser::base::ast::Program;
 use crate::eval::evaluator;
 use crate::eval::evaluator::Env;
 use crate::vm::{Globals, Vm};
@@ -10,7 +10,7 @@ use std::time::Instant;
 
 pub mod benchmark;
 mod compiler;
-mod core;
+mod parser;
 mod eval;
 mod object;
 pub mod repl;

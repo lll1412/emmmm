@@ -52,12 +52,12 @@ op_build!(
     [
         // 常量
         Constant(2),
-        Constant0(),// const_index = 0..4
+        Constant0(), // const_index = 0..4
         Constant1(),
         Constant2(),
         Constant3(),
         Constant4(),
-        ConstantOne(1),//一字节
+        ConstantOne(1), //一字节
         // 数组
         Array(2),
         // Hash
@@ -96,14 +96,14 @@ op_build!(
         GetGlobal4(),
         //局部变量
         SetLocal(1),
-        SetLocal0(),// set_local = 0..4
+        SetLocal0(), // set_local = 0..4
         SetLocal1(),
         SetLocal2(),
         SetLocal3(),
         SetLocal4(),
-
+        //
         GetLocal(1),
-        GetLocal0(),// get_local = 0..4
+        GetLocal0(), // get_local = 0..4
         GetLocal1(),
         GetLocal2(),
         GetLocal3(),
@@ -112,7 +112,7 @@ op_build!(
         GetBuiltin(1),
         Closure(2, 1),
         // GetThis(),
-        // CurrentClosure(),
+        CurrentClosure(),
         GetFree(1),
         // 赋值操作
         Assign(2),
@@ -206,7 +206,19 @@ pub fn _make_closure(fun_index: usize, free_num: usize) -> Instructions {
     make(Opcode::Closure, vec![fun_index, free_num])
 }
 pub fn _make_const(index: usize) -> Instructions {
-    make(Opcode::Constant, vec![index])
+    if index < 0xff {
+        let op = match index {
+            0 => Opcode::Constant0,
+            1 => Opcode::Constant1,
+            2 => Opcode::Constant2,
+            3 => Opcode::Constant3,
+            4 => Opcode::Constant4,
+            _ => return make(Opcode::ConstantOne, vec![index]),
+        };
+        make(op, vec![])
+    } else {
+        make(Opcode::Constant, vec![index])
+    }
 }
 
 pub fn _make_noop(op_code: Opcode) -> Instructions {

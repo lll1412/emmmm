@@ -3,12 +3,12 @@ use std::rc::Rc;
 
 use crate::compiler::code::{Instructions, Opcode};
 use crate::compiler::symbol_table::{Symbol, SymbolScope, SymbolTable};
-use crate::core::base::ast::{
-    BinaryOperator, BlockStatement, Expression, Program, Statement, UnaryOperator,
-};
 use crate::create_rc_ref_cell;
 use crate::object::{CompiledFunction, Object};
 use crate::object::builtins::BUILTINS;
+use crate::parser::base::ast::{
+    BinaryOperator, BlockStatement, Expression, Program, Statement, UnaryOperator,
+};
 
 pub mod code;
 pub mod symbol_table;
@@ -18,6 +18,7 @@ type CompileResult<T = ()> = std::result::Result<T, CompileError>;
 pub type Constants = Vec<Rc<Object>>;
 pub type RcSymbolTable = Rc<RefCell<SymbolTable>>;
 const CONSTANT_CAPACITY: usize = 0xFFFF;
+
 #[derive(Debug, Clone)]
 pub struct Compiler {
     constants: Constants,
@@ -25,7 +26,11 @@ pub struct Compiler {
     scopes: Vec<CompilationScope>,
     scope_index: usize,
 }
-
+#[derive(Debug, Clone)]
+pub struct ByteCode {
+    pub instructions: Instructions,
+    pub constants: Constants,
+}
 #[derive(Debug, Clone)]
 pub struct EmittedInstruction {
     pub op_code: Opcode,
@@ -39,6 +44,19 @@ pub struct CompilationScope {
     previous_instruction: Option<EmittedInstruction>,
 }
 
+#[derive(Debug)]
+pub enum CompileError {
+    UnknownBinOperator(BinaryOperator),
+    UnsupportedBinOperation(BinaryOperator, Expression, Expression),
+    _UnsupportedIndexOperation(Expression, Expression),
+
+    _UnknownUnOperator(UnaryOperator),
+    UnknownExpression(Expression),
+
+    UndefinedIdentifier(String),
+    CustomErrMsg(String),
+}
+
 impl CompilationScope {
     fn new() -> Self {
         Default::default()
@@ -49,9 +67,6 @@ impl CompilationScope {
             None => false,
             Some(last) => last.op_code == op,
         }
-    }
-    fn _cur_instruction(&self) -> &Instructions {
-        &self.instructions
     }
     // 记录为为上条指令
     fn set_last_instruction(&mut self, inst: EmittedInstruction) {
@@ -181,9 +196,7 @@ impl Compiler {
             Statement::Comment(_comment) => {
                 //todo ignore comment
             }
-            Statement::For(init, cond, after, blocks) => {
-                panic!()
-            }
+            Statement::For(_init, _cond, _after, _blocks) => panic!(),
         }
         Ok(())
     }
@@ -544,7 +557,6 @@ impl Compiler {
             }
             SymbolScope::Local => {
                 let i = symbol.index;
-                let mut o = vec![];
                 let op = match i {
                     0 => Opcode::SetLocal0,
                     1 => Opcode::SetLocal1,
@@ -552,11 +564,11 @@ impl Compiler {
                     3 => Opcode::SetLocal3,
                     4 => Opcode::SetLocal4,
                     _ => {
-                        o = vec![i];
-                        Opcode::SetLocal
+                        self.emit(Opcode::SetLocal, vec![i]);
+                        return;
                     }
                 };
-                self.emit(op, o);
+                self.emit(op, vec![]);
             }
             _ => unimplemented!(),
         };
@@ -577,12 +589,6 @@ impl Compiler {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct ByteCode {
-    pub instructions: Instructions,
-    pub constants: Constants,
-}
-
 impl ByteCode {
     pub fn new(instructions: Instructions, constants: Constants) -> Self {
         Self {
@@ -590,17 +596,4 @@ impl ByteCode {
             constants,
         }
     }
-}
-
-#[derive(Debug)]
-pub enum CompileError {
-    UnknownBinOperator(BinaryOperator),
-    UnsupportedBinOperation(BinaryOperator, Expression, Expression),
-    _UnsupportedIndexOperation(Expression, Expression),
-
-    _UnknownUnOperator(UnaryOperator),
-    UnknownExpression(Expression),
-
-    UndefinedIdentifier(String),
-    CustomErrMsg(String),
 }

@@ -1,10 +1,12 @@
-mod r#impl;
-mod test;
-
-use crate::core::{
+use crate::parser::{
     base::{ast::Expression, token::Token},
     lexer::Lexer,
 };
+
+pub mod base;
+mod r#impl;
+mod lexer;
+mod test;
 
 type ParseResult<T = Expression> = std::result::Result<T, ParserError>;
 type UnaryParseFn = fn(&mut Parser) -> ParseResult<Expression>;

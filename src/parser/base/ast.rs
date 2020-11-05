@@ -1,6 +1,6 @@
 use std::fmt::{Display, Formatter, Result};
 
-use crate::core::parser::Parser;
+use crate::parser::Parser;
 
 #[derive(Debug)]
 pub struct Program {

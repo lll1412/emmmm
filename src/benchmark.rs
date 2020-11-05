@@ -3,10 +3,10 @@ use std::rc::Rc;
 use std::time::Instant;
 
 use crate::compiler::Compiler;
-use crate::core::parser::Parser;
 use crate::Engine;
-use crate::eval::evaluator;
-use crate::object::{environment, Object};
+use crate::eval::{evaluator, Environment};
+use crate::object::Object;
+use crate::parser::Parser;
 use crate::vm::Vm;
 
 pub fn benchmark(engine: Engine) {
@@ -17,8 +17,8 @@ pub fn benchmark(engine: Engine) {
     // optimized 2, n = 35, takes 7.8s.
     // optimized 3, n = 35, takes 3.4s.//rust更新1.47之后变4.4s了
     // optimized 4, n = 35, takes 3.35s
-    // optimized 5, n = 35, takes 2.3s
-    let n = 35;
+    // optimized 5, n = 35, takes 2.3s, n = 36, takes 4.4s
+    let n = 36;
     let code = &format!(
         r"let fibonacci = fn(x) {{
              if x < 2 {{
@@ -37,7 +37,7 @@ pub fn benchmark(engine: Engine) {
     let start;
     let result = match engine {
         Engine::Eval => {
-            let env = Rc::new(RefCell::new(environment::Environment::new()));
+            let env = Rc::new(RefCell::new(Environment::new()));
             start = Instant::now();
             evaluator::eval(&program, env).expect("eval error")
         }
@@ -52,13 +52,11 @@ pub fn benchmark(engine: Engine) {
             let mut vm = Vm::new(byte_code);
             start = Instant::now();
             let r = match vm.run() {
-                Ok(result) => {
-                    result
-                },
+                Ok(result) => result,
                 Err(err) => {
                     println!("err: {}", err);
                     Rc::new(Object::Null)
-                },
+                }
             };
             Object::clone(&r)
             // let result = vm.run().expect("runtime error");

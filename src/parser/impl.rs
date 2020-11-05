@@ -1,10 +1,10 @@
-use crate::core::{
+use crate::parser::{
+    {BinaryParseFn, Parser, ParserError, ParseResult, Precedence, UnaryParseFn},
     base::ast::{BinaryOperator, Expression, Program, Statement, UnaryOperator},
     base::token::Token,
     lexer::Lexer,
-    parser::{BinaryParseFn, Parser, ParserError, ParseResult, Precedence, UnaryParseFn},
 };
-use crate::core::base::ast::BlockStatement;
+use crate::parser::base::ast::BlockStatement;
 
 impl Parser {
     // 从Lexer构建Parser

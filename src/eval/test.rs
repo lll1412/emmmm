@@ -1,12 +1,12 @@
 #[cfg(test)]
 mod tests {
-    use crate::core::base::ast::{
+    use crate::parser::base::ast::{
         BinaryOperator, BlockStatement, Expression, Statement, UnaryOperator,
     };
-    use crate::core::parser::Parser;
+    use crate::parser::Parser;
     use crate::eval::evaluator;
     use crate::eval::evaluator::{Env, EvalResult};
-    use crate::object::environment::Environment;
+    use crate::eval::Environment;
     use crate::object::{HashKey, Object, RuntimeError};
     use std::cell::RefCell;
     use std::collections::HashMap;

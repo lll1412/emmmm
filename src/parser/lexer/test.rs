@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
-    use crate::core::base::token::Token;
-    use crate::core::lexer::Lexer;
+    use crate::parser::base::token::Token;
+    use crate::parser::lexer::Lexer;
     use Token::Plus;
     #[test]
     fn print_token() {

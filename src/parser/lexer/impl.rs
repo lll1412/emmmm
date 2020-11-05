@@ -1,8 +1,8 @@
 use std::iter::Peekable;
 use std::str::Chars;
 
-use crate::core::base::token::*;
-use crate::core::lexer::{is_digit, is_letter, Lexer};
+use crate::parser::base::token::*;
+use crate::parser::lexer::{is_digit, is_letter, Lexer};
 
 impl Lexer {
     pub fn new(input: &str) -> Self {

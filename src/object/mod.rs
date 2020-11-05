@@ -4,12 +4,11 @@ use std::fmt::{Display, Formatter, Result};
 use std::rc::Rc;
 
 use crate::compiler::code::{print_instructions, Instructions, Opcode};
-use crate::core::base::ast::{BinaryOperator, BlockStatement, Expression, UnaryOperator};
+use crate::parser::base::ast::{BinaryOperator, BlockStatement, Expression, UnaryOperator};
 use crate::eval::evaluator::EvalResult;
-use crate::object::environment::Environment;
+use crate::eval::Environment;
 
 pub mod builtins;
-pub mod environment;
 
 type BuiltinFunction = fn(Vec<Object>) -> EvalResult<Object>;
 

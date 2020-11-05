@@ -3,8 +3,8 @@ mod tests {
     use BinaryOperator::*;
     use Expression::*;
 
-    use crate::core::base::ast::{BlockStatement, Expression};
-    use crate::core::{base::ast::*, lexer::*, parser::Parser};
+    use crate::parser::{base::ast::*, lexer::*, parser};
+    use crate::parser::base::ast::{BlockStatement, Expression};
 
     #[test]
     fn for_statement() {
@@ -39,7 +39,37 @@ mod tests {
                 r = r + 1;
             }
         "#,
-                Statement::Comment("".to_string()),
+                Statement::For(
+                    Some(Box::new(Statement::Let(
+                        "i".to_string(),
+                        Expression::IntLiteral(0),
+                    ))),
+                    Some(Expression::Binary(
+                        BinaryOperator::Lt,
+                        Box::new(Expression::Identifier("i".to_string())),
+                        Box::new(Expression::IntLiteral(10)),
+                    )),
+                    Some(Expression::Binary(
+                        BinaryOperator::Assign,
+                        Box::new(Expression::Identifier("i".to_string())),
+                        Box::new(Expression::Binary(
+                            BinaryOperator::Plus,
+                            Box::new(Expression::Identifier("i".to_string())),
+                            Box::new(Expression::IntLiteral(1)),
+                        )),
+                    )),
+                    BlockStatement {
+                        statements: vec![Statement::Expression(Expression::Binary(
+                            BinaryOperator::Assign,
+                            Box::new(Expression::Identifier("r".to_string())),
+                            Box::new(Expression::Binary(
+                                BinaryOperator::Plus,
+                                Box::new(Expression::Identifier("r".to_string())),
+                                Box::new(Expression::IntLiteral(1)),
+                            )),
+                        ))],
+                    },
+                ),
             ),
         ];
         test_parse_statement_str(inputs);

@@ -3,13 +3,13 @@ use std::collections::HashMap;
 use std::ops::Deref;
 use std::rc::Rc;
 
-use crate::core::base::ast::{
+use crate::eval::Environment;
+use crate::object::{HashKey, Object, RuntimeError};
+use crate::object::builtins::lookup;
+use crate::object::Object::Boolean;
+use crate::parser::base::ast::{
     BinaryOperator, BlockStatement, Expression, Program, Statement, UnaryOperator,
 };
-use crate::object::builtins::lookup;
-use crate::object::environment::Environment;
-use crate::object::Object::Boolean;
-use crate::object::{HashKey, Object, RuntimeError};
 
 pub type EvalResult<T = Object> = Result<T, RuntimeError>;
 pub type Env = Rc<RefCell<Environment>>;

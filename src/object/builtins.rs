@@ -2,6 +2,7 @@ use std::cell::RefCell;
 
 use crate::eval::evaluator::EvalResult;
 use crate::object::{Object, RuntimeError};
+use std::time::SystemTime;
 
 macro_rules! builtin {
     ($name:ident) => {
@@ -25,6 +26,7 @@ pub const BUILTINS: &[Builtin] = &[
     builtin!(rest),
     builtin!(push),
     builtin!(print),
+    builtin!(time),
 ];
 
 pub fn lookup(name: &str) -> Option<Object> {
@@ -130,6 +132,15 @@ pub fn print(args: Vec<Object>) -> EvalResult {
         .map(|arg| arg.to_string())
         .for_each(|s| println!("{}", s));
     Ok(Object::Null)
+}
+
+pub fn time(args: Vec<Object>) -> EvalResult {
+    assert_argument_count(0, &args)?;
+    let time = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap()
+        .as_millis();
+    Ok(Object::Integer(time as i64))
 }
 
 fn assert_argument_count(expected: usize, args: &[Object]) -> EvalResult<()> {

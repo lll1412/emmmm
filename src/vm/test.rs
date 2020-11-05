@@ -4,7 +4,7 @@ mod tests {
     use std::collections::HashMap;
 
     use crate::compiler::Compiler;
-    use crate::core::base::ast::Program;
+    use crate::parser::base::ast::Program;
     use crate::object::{HashKey, Object, RuntimeError};
     use crate::vm::Vm;
     use std::time::Instant;
@@ -48,7 +48,7 @@ mod tests {
                 r"
             let countDown = fn(x) {
                 if x == 0 {
-                    x
+                    0
                 } else {
                     countDown(x - 1)
                 }
@@ -65,7 +65,7 @@ mod tests {
                 let wrapper = fn() {
                     let countDown = fn(x) {
                         if x == 0 {
-                            x
+                            0
                         } else {
                             countDown(x - 1)
                         }
