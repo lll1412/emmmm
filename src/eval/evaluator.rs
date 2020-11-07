@@ -1,15 +1,15 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::ops::Deref;
 use std::rc::Rc;
 
 use crate::eval::Environment;
-use crate::object::{HashKey, Object, RuntimeError};
 use crate::object::builtins::lookup;
 use crate::object::Object::Boolean;
+use crate::object::{HashKey, Object, RuntimeError};
 use crate::parser::base::ast::{
     BinaryOperator, BlockStatement, Expression, Program, Statement, UnaryOperator,
 };
+use std::ops::Deref;
 
 pub type EvalResult<T = Object> = Result<T, RuntimeError>;
 pub type Env = Rc<RefCell<Environment>>;
@@ -24,8 +24,8 @@ fn eval_statement(statement: &Statement, env: Env) -> EvalResult {
     match statement {
         Statement::Let(name, expr) => {
             let val = eval_expression(expr, Rc::clone(&env))?;
-            env.deref().borrow_mut().set(&name, val.clone());
-            Ok(val)
+            env.borrow_mut().set(&name, val)?;
+            Ok(Object::Null)
         }
         Statement::Return(option) => {
             option
@@ -40,6 +40,16 @@ fn eval_statement(statement: &Statement, env: Env) -> EvalResult {
         Statement::For(init, cond, after, blocks) => {
             eval_for_statement(init, cond, after, blocks, Rc::clone(&env))
         }
+        Statement::Function(name, args, blocks) => {
+            let val = Object::Function(
+                Some(name.clone()),
+                args.clone(),
+                blocks.clone(),
+                env.clone(),
+            );
+            env.borrow_mut().set(name, val)?;
+            Ok(Object::Null)
+        } // _ => unimplemented!(),
     }
 }
 /// for循环求值
@@ -122,6 +132,8 @@ fn eval_expression(expr: &Expression, env: Env) -> EvalResult {
 
         Expression::Identifier(id) => eval_identifier_expression(Rc::clone(&env), &id),
         Expression::FunctionLiteral(params, block) => Ok(Object::Function(
+            // todo 待定是否新增object类型区分函数语句和表达式
+            None,
             params.clone(),
             block.clone(),
             Rc::clone(&env),
@@ -200,12 +212,11 @@ fn eval_expressions(exprs: &[Expression], env: Env) -> EvalResult<Vec<Object>> {
 /// ## 函数表达式求值
 fn apply_function(fun: Object, param_values: Vec<Object>) -> EvalResult {
     match fun {
-        Object::Function(param_names, block, parent_env) => {
+        Object::Function(_name, param_names, block, parent_env) => {
             let env = Rc::new(RefCell::new(Environment::extend(parent_env)));
             for (i, param) in param_names.iter().enumerate() {
-                env.deref()
-                    .borrow_mut()
-                    .set(param, param_values.get(i).unwrap_or(&Object::Null).clone());
+                env.borrow_mut()
+                    .set(param, param_values.get(i).unwrap_or(&Object::Null).clone())?;
             }
             let evaluated = eval_block_statements(&block, Rc::clone(&env))?;
             match evaluated {
@@ -253,9 +264,9 @@ fn eval_binary_expression(
     match left {
         //变量赋值
         Expression::Identifier(id) if operator == &BinaryOperator::Assign => {
-            if env.deref().borrow().contains(&id) {
+            if env.borrow().contains(&id) {
                 let new_val = eval_expression(right, Rc::clone(&env))?;
-                env.borrow_mut().set(&id, new_val.clone());
+                env.borrow_mut().set(&id, new_val.clone())?;
                 Ok(new_val)
             } else {
                 Err(RuntimeError::IdentifierNotFound(id.clone()))
@@ -265,7 +276,7 @@ fn eval_binary_expression(
         Expression::Index(arr, key) if operator == &BinaryOperator::Assign => {
             //只能通过数组名索引来修改
             if let Expression::Identifier(obj_name) = arr.deref() {
-                let option = env.deref().borrow().get(&obj_name);
+                let option = env.borrow().get(&obj_name);
                 if let Some(obj) = option {
                     //是否存在
                     let ref_obj = obj.borrow();

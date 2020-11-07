@@ -48,6 +48,7 @@ impl Parser {
             Token::Return => self.parse_return_statement(),
             Token::Comment(comment) => Ok(Statement::Comment(comment.to_string())),
             Token::For => self.parse_for_statement(),
+            Token::Function => self.parse_function_statement(),
             _ => self.parse_expression_statement(),
         }
     }
@@ -67,14 +68,18 @@ impl Parser {
         self.expect_peek(Token::Assign, ParserError::ExpectedAssign)?;
         //expr
         self.next_token(); //eat =
-        let mut expression = self.parse_expression(Precedence::Lowest)?;
+        let expression = self.parse_expression(Precedence::Lowest)?;
+        let result;
+        //如果是let name = fn() {} ,转换为 fn name(){}
         if let Expression::FunctionLiteral(params, block) = expression {
-            expression = Expression::FunctionLiteral(params, block);
+            result = Statement::Function(name.clone(), params, block)
+        } else {
+            result = Statement::Let(name, expression)
         }
         if self.peek_token == Token::Semicolon {
             self.next_token(); //eat ;
         }
-        Ok(Statement::Let(name, expression))
+        Ok(result)
     }
     /// 解析return语句
     ///
@@ -120,6 +125,21 @@ impl Parser {
         let for_statement = Statement::For(init, cond, after, blocks);
         Ok(for_statement)
     }
+    /// 解析函数语句 fn ident(args..) { blocks }
+    fn parse_function_statement(&mut self) -> ParseResult<Statement> {
+        //cur token: fn
+        if let Token::Ident(name) = self.peek_token.clone() {
+            self.next_token(); // eat fun
+            self.next_token(); // eat ident
+            let params = self.parse_function_parameters()?;
+            self.expect_peek_is(Token::Lbrace)?; // eat )
+            let blocks = self.parse_block_statement()?;
+            Ok(Statement::Function(name, params, blocks))
+        } else {
+            self.parse_expression_statement()
+        }
+    }
+
     /// 解析表达式语句
     ///
     /// expr;
@@ -231,6 +251,7 @@ impl Parser {
     }
     /// 解析函数表达式
     fn parse_function_expression(&mut self) -> ParseResult {
+        //cur token: fn
         self.expect_peek_is(Token::Lparen)?; // eat fun
         let params = self.parse_function_parameters()?;
         self.expect_peek_is(Token::Lbrace)?; // eat )

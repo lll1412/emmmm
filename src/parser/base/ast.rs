@@ -34,6 +34,7 @@ pub enum Statement {
         Option<Expression>,     // after
         BlockStatement,         // blocks
     ),
+    Function(String, Vec<String>, BlockStatement),
     //
     Expression(Expression),
 }
@@ -148,6 +149,13 @@ impl Display for Statement {
                 } else {
                     blocks.to_string()
                 }
+            ),
+            Statement::Function(name, params, blocks) => write!(
+                f,
+                "fn {name}({params}) {blocks}",
+                name = name,
+                params = params.join(", "),
+                blocks = blocks
             ),
         }
     }

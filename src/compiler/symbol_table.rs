@@ -11,7 +11,7 @@ pub enum SymbolScope {
     Local,
     Builtin,
     Free,
-    // Function
+    Function,
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -78,7 +78,15 @@ impl SymbolTable {
         let symbol = Rc::new(symbol);
         self.store.insert(name, symbol);
     }
-
+    pub fn define_self(&mut self, fun_name: Option<String>){
+        let name = fun_name.unwrap_or("this".to_string());
+        let self_symbol = Rc::new(Symbol {
+            name: name.clone(),
+            scope: SymbolScope::Function,
+            index: 0,
+        });
+        self.store.insert(name, self_symbol);
+    }
     /// 先从当前符号表查找
     /// 没有则解析父符号表
     pub fn resolve(&mut self, name: &str) -> Option<Rc<Symbol>> {

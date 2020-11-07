@@ -2,7 +2,9 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use crate::object::Object;
+use crate::eval::evaluator::EvalResult;
+use crate::object::{Object, RuntimeError};
+use crate::object::builtins::lookup;
 
 pub mod evaluator;
 mod test;
@@ -37,9 +39,14 @@ impl Environment {
         }
     }
 
-    pub fn set(&mut self, key: &str, val: Object) {
-        self.store
-            .insert(key.to_string(), Rc::new(RefCell::new(val)));
+    pub fn set(&mut self, key: &str, val: Object) -> EvalResult<()> {
+        if lookup(key).is_some() {
+            Err(RuntimeError::VariableHasBeenDeclared(key.to_string()))
+        } else {
+            self.store
+                .insert(key.to_string(), Rc::new(RefCell::new(val)));
+            Ok(())
+        }
     }
     pub fn contains(&self, key: &str) -> bool {
         if self.store.contains_key(key) {

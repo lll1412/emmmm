@@ -4,8 +4,8 @@ use std::rc::Rc;
 use crate::compiler::code::{Instructions, Opcode};
 use crate::compiler::symbol_table::{Symbol, SymbolScope, SymbolTable};
 use crate::create_rc_ref_cell;
-use crate::object::{CompiledFunction, Object};
 use crate::object::builtins::BUILTINS;
+use crate::object::{CompiledFunction, Object};
 use crate::parser::base::ast::{
     BinaryOperator, BlockStatement, Expression, Program, Statement, UnaryOperator,
 };
@@ -196,7 +196,13 @@ impl Compiler {
             Statement::Comment(_comment) => {
                 //todo ignore comment
             }
-            Statement::For(_init, _cond, _after, _blocks) => panic!(),
+            // Statement::For(init, cond, after, blocks) => panic!(),
+            Statement::Function(name, args, blocks) => {
+                let symbol = self.symbol_table.borrow_mut().define(name);
+                self.compile_function_expression(Some(name.clone()), args, blocks)?;
+                self.store_symbol(symbol);
+            }
+            _ => unimplemented!(),
         }
         Ok(())
     }
@@ -323,54 +329,7 @@ impl Compiler {
                 self.change_operand(jump_always_pos, final_pos);
             }
             Expression::FunctionLiteral(args, blocks) => {
-                self.enter_scope();
-                //函数名
-                // if let Some(name) = fun_name {
-                //     self.symbol_table
-                //         .borrow_mut()
-                //         .define_function_name(name.clone());
-                // }
-                //参数列表
-                for arg in args {
-                    self.symbol_table.borrow_mut().define(arg);
-                }
-                //编译语句块
-                self.compile_block_statement(blocks)?;
-                //如果最后一条指令是pop，说明有返回值，改为return_value
-                if self.last_instruction_is(Opcode::Pop) {
-                    self.remove_last_instruction()?;
-                    self.emit(Opcode::ReturnValue, vec![]);
-                }
-                //如果没有返回值
-                if !self.last_instruction_is(Opcode::ReturnValue) {
-                    self.emit(Opcode::Return, vec![]);
-                }
-
-                let frees = &self
-                    .symbol_table
-                    .borrow()
-                    .free_symbols
-                    .iter()
-                    .map(|s| s.name.clone())
-                    .collect::<Vec<String>>();
-                //自由变量个数
-                let free_count = frees.len();
-                //局部变量个数
-                let num_locals = self.symbol_table_len();
-                //编译后的函数常量
-                let compiled_fn = self.leave_scope();
-                //自由变量
-                for name in frees {
-                    self.load_symbol(name)?; // emit free
-                }
-                let constant = Object::CompiledFunction(CompiledFunction {
-                    insts: Rc::new(compiled_fn),
-                    num_locals,
-                    num_parameters: args.len(),
-                });
-                let const_index = self.add_constant(constant);
-                //函数常量索引
-                self.emit(Opcode::Closure, vec![const_index, free_count]);
+                self.compile_function_expression(None, args, blocks)?;
             }
             Expression::Call(fun, args) => {
                 self.compile_expression(fun)?;
@@ -381,6 +340,59 @@ impl Compiler {
             }
             _ => return Err(CompileError::UnknownExpression(expression.clone())),
         }
+        Ok(())
+    }
+    fn compile_function_expression(
+        &mut self,
+        fun_name: Option<String>,
+        args: &Vec<String>,
+        blocks: &BlockStatement,
+    ) -> CompileResult {
+        self.enter_scope();
+        //当前函数
+        self.symbol_table.borrow_mut().define_self(fun_name.clone());
+        //参数列表
+        for arg in args {
+            self.symbol_table.borrow_mut().define(arg);
+        }
+        //编译语句块
+        self.compile_block_statement(blocks)?;
+        //如果最后一条指令是pop，说明有返回值，改为return_value
+        if self.last_instruction_is(Opcode::Pop) {
+            self.remove_last_instruction()?;
+            self.emit(Opcode::ReturnValue, vec![]);
+        }
+        //如果没有返回值
+        if !self.last_instruction_is(Opcode::ReturnValue) {
+            self.emit(Opcode::Return, vec![]);
+        }
+
+        let frees = &self
+            .symbol_table
+            .borrow()
+            .free_symbols
+            .iter()
+            .map(|s| s.name.clone())
+            .collect::<Vec<String>>();
+        //自由变量个数
+        let free_count = frees.len();
+        //局部变量个数
+        let num_locals = self.symbol_table_len();
+        //编译后的函数常量
+        let compiled_fn = self.leave_scope();
+        //自由变量
+        for name in frees {
+            self.load_symbol(name)?; // emit free
+        }
+        let constant = Object::CompiledFunction(CompiledFunction::with_name(
+            fun_name,
+            Rc::new(compiled_fn),
+            num_locals,
+            args.len(),
+        ));
+        let const_index = self.add_constant(constant);
+        //函数常量索引
+        self.emit(Opcode::Closure, vec![const_index, free_count]);
         Ok(())
     }
     /// 编译一元表达式
@@ -502,7 +514,7 @@ impl Compiler {
         self.replace_instruction(op_pos, new_instruction);
     }
     /// 读取符号表元素（生成一条获取该数据的指令）
-    fn load_symbol(&mut self, name: &str) -> CompileResult<()> {
+    fn load_symbol(&mut self, name: &str) -> CompileResult {
         let option = self.symbol_table.borrow_mut().resolve(name);
         let symbol = match option {
             None => return Err(CompileError::UndefinedIdentifier(name.to_string())),
@@ -545,6 +557,10 @@ impl Compiler {
             }
             SymbolScope::Builtin => Opcode::GetBuiltin,
             SymbolScope::Free => Opcode::GetFree,
+            SymbolScope::Function => {
+                self.emit(Opcode::CurrentClosure, vec![]);
+                return Ok(())
+            },
         };
         self.emit(op, vec![symbol.index]);
         Ok(())

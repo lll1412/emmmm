@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
-use crate::compiler::code::Opcode;
 use crate::compiler::{ByteCode, Constants};
+use crate::compiler::code::Opcode;
 use crate::object::{Closure, CompiledFunction, Object, RuntimeError};
 use crate::vm::frame::Frame;
 
@@ -60,7 +60,7 @@ impl Vm {
             int_cache.push(Rc::new(Object::Integer(i as i64)))
         }
         //
-        let main_fn = CompiledFunction::new(byte_code.instructions, 0, 0);
+        let main_fn = CompiledFunction::new(Rc::new(byte_code.instructions), 0, 0);
         let main_closure = Closure::new(main_fn, vec![]);
         let main_frame = Frame::new(main_closure, 0);
         let mut frames = Vec::with_capacity(MAX_FRAMES);
@@ -337,6 +337,10 @@ impl Vm {
                     )?;
                     self.current_frame_ip_inc(n);
                 }
+                Opcode::CurrentClosure => {
+                    let current_closure = self.current_frame().closure.clone();
+                    self.push_stack(Rc::new(Object::Closure(current_closure)))?;
+                }
 
                 Opcode::Assign => {
                     let (global_index, n) = self.read_usize(op_code, ip);
@@ -349,6 +353,7 @@ impl Vm {
                     self.current_frame_ip_inc(1);
                     self.call_function(arg_nums)?;
                 }
+
                 Opcode::ReturnValue => {
                     let return_value = self.stack[self.sp - 1].clone();
                     // self.sp -= 1;

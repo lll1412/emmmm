@@ -56,8 +56,8 @@ pub fn current_mode() -> Mode {
 pub fn exe_with_eval(program: &Program, env: &Env) {
     let result = evaluator::eval(program, env.clone());
     match result {
-        Ok(object) => println!("{}", object),
-        Err(err) => eprintln!("{}", err),
+        Ok(object) => println!("Output: {}", object),
+        Err(err) => eprintln!("Error: {}", err),
     }
 }
 
@@ -76,10 +76,10 @@ pub fn exe_with_vm(
             let result = vm.run();
             match result {
                 Ok(object) => {
-                    println!("{}", object);
+                    println!("Output: {}", object);
                     println!("takes {} ms", start.elapsed().as_millis());
                 }
-                Err(vm_err) => eprintln!("{:?}", vm_err),
+                Err(vm_err) => eprintln!("Error: {:?}", vm_err),
             }
         }
         Err(com_err) => eprintln!("{:?}", com_err),

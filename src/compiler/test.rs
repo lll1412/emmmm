@@ -8,9 +8,9 @@ mod tests {
         self, _make, _make_closure, _make_const, _make_noop, make, Opcode, print_instructions,
     };
     use crate::compiler::symbol_table::{Symbol, SymbolScope, SymbolTable};
-    use crate::parser::base::ast::Program;
     use crate::create_rc_ref_cell;
     use crate::object::{CompiledFunction, Object};
+    use crate::parser::base::ast::Program;
 
     macro_rules! hash {
         {} => {
@@ -30,21 +30,20 @@ mod tests {
 
     #[test]
     fn recursive_function() {
-        let count_down_const = Object::CompiledFunction(CompiledFunction {
-            insts: Rc::new(
-                vec![
-                    _make_noop(Opcode::GetGlobal0),
-                    _make_noop(Opcode::GetLocal0),
-                    _make_const(0),
-                    _make_noop(Opcode::Sub),
-                    _make(Opcode::Call, 1),
-                    _make_noop(Opcode::ReturnValue),
-                ]
-                .concat(),
-            ),
-            num_locals: 1,
-            num_parameters: 1,
-        });
+        let count_down_const = make_fun_object_with_name(
+            "countDown",
+            vec![
+                _make_noop(Opcode::CurrentClosure),
+                _make_noop(Opcode::GetLocal0),
+                _make_const(0),
+                _make_noop(Opcode::Sub),
+                _make(Opcode::Call, 1),
+                _make_noop(Opcode::ReturnValue),
+            ]
+            .concat(),
+            1,
+            1,
+        );
         let inputs = vec![
             (
                 r"
@@ -67,43 +66,44 @@ mod tests {
                     _make_noop(Opcode::Pop),
                 ],
             ),
-            // (
-            //     r"
-            //     let wrapper = fn() {
-            //         let countDown = fn(x) {
-            //             countDown(x - 1)
-            //         }
-            //         1
-            //         // countDown(1)
-            //     }
-            //     wrapper()
-            //               ",
-            //     vec![
-            //         Object::Integer(1),
-            //         count_down_const,
-            //         Object::Integer(1),
-            //         Object::CompiledFunction(
-            //             vec![
-            //                 _make_closure(1, 0),
-            //                 _make(Opcode::SetLocal, 0),
-            //                 // _make(Opcode::GetLocal, 0),
-            //                 _make_const(2),
-            //                 // _make(Opcode::Call, 1),
-            //                 _make_noop(Opcode::ReturnValue),
-            //             ]
-            //             .concat(),
-            //             1,
-            //             0,
-            //         ),
-            //     ],
-            //     vec![
-            //         _make_closure(3, 0),
-            //         _make(Opcode::SetGlobal, 0),
-            //         _make(Opcode::GetGlobal, 0),
-            //         _make(Opcode::Call, 0),
-            //         _make_noop(Opcode::Pop),
-            //     ],
-            // ),
+            (
+                r"
+                let wrapper = fn() {
+                    let countDown = fn(x) {
+                        countDown(x - 1)
+                    }
+                    // 1
+                    countDown(1)
+                }
+                wrapper()
+                          ",
+                vec![
+                    Object::Integer(1),
+                    count_down_const,
+                    Object::Integer(1),
+                    make_fun_object_with_name(
+                        "wrapper",
+                        vec![
+                            _make_closure(1, 0),
+                            _make_noop(Opcode::SetLocal0),
+                            _make_noop(Opcode::GetLocal0),
+                            _make_const(2),
+                            _make(Opcode::Call, 1),
+                            _make_noop(Opcode::ReturnValue),
+                        ]
+                        .concat(),
+                        1,
+                        0,
+                    ),
+                ],
+                vec![
+                    _make_closure(3, 0),
+                    _make(Opcode::SetGlobal, 0),
+                    _make_noop(Opcode::GetGlobal0),
+                    _make(Opcode::Call, 0),
+                    _make_noop(Opcode::Pop),
+                ],
+            ),
         ];
 
         run_compile_test(inputs);
@@ -120,31 +120,27 @@ mod tests {
             }
             ",
                 vec![
-                    Object::CompiledFunction(CompiledFunction {
-                        insts: Rc::new(
-                            vec![
-                                _make(Opcode::GetFree, 0),
-                                _make_noop(Opcode::GetLocal0),
-                                _make_noop(Opcode::Add),
-                                _make_noop(Opcode::ReturnValue),
-                            ]
-                            .concat(),
-                        ),
-                        num_locals: 1,
-                        num_parameters: 1,
-                    }),
-                    Object::CompiledFunction(CompiledFunction {
-                        insts: Rc::new(
-                            vec![
-                                _make_noop(Opcode::GetLocal0),
-                                _make_closure(0, 1),
-                                _make_noop(Opcode::ReturnValue),
-                            ]
-                            .concat(),
-                        ),
-                        num_locals: 1,
-                        num_parameters: 1,
-                    }),
+                    make_fun_object(
+                        vec![
+                            _make(Opcode::GetFree, 0),
+                            _make_noop(Opcode::GetLocal0),
+                            _make_noop(Opcode::Add),
+                            _make_noop(Opcode::ReturnValue),
+                        ]
+                        .concat(),
+                        1,
+                        1,
+                    ),
+                    make_fun_object(
+                        vec![
+                            _make_noop(Opcode::GetLocal0),
+                            _make_closure(0, 1),
+                            _make_noop(Opcode::ReturnValue),
+                        ]
+                        .concat(),
+                        1,
+                        1,
+                    ),
                 ],
                 vec![_make_closure(1, 0), _make_noop(Opcode::Pop)],
             ),
@@ -159,46 +155,40 @@ mod tests {
             }
             ",
                 vec![
-                    Object::CompiledFunction(CompiledFunction {
-                        insts: Rc::new(
-                            vec![
-                                _make(Opcode::GetFree, 0),
-                                _make(Opcode::GetFree, 1),
-                                _make_noop(Opcode::Add),
-                                _make_noop(Opcode::GetLocal0),
-                                _make_noop(Opcode::Add),
-                                _make_noop(Opcode::ReturnValue),
-                            ]
-                            .concat(),
-                        ),
-                        num_locals: 1,
-                        num_parameters: 1,
-                    }),
-                    Object::CompiledFunction(CompiledFunction {
-                        insts: Rc::new(
-                            vec![
-                                _make(Opcode::GetFree, 0),
-                                _make_noop(Opcode::GetLocal0),
-                                _make_closure(0, 2),
-                                _make_noop(Opcode::ReturnValue),
-                            ]
-                            .concat(),
-                        ),
-                        num_locals: 1,
-                        num_parameters: 1,
-                    }),
-                    Object::CompiledFunction(CompiledFunction {
-                        insts: Rc::new(
-                            vec![
-                                _make_noop(Opcode::GetLocal0),
-                                _make_closure(1, 1),
-                                _make_noop(Opcode::ReturnValue),
-                            ]
-                            .concat(),
-                        ),
-                        num_locals: 1,
-                        num_parameters: 1,
-                    }),
+                    make_fun_object(
+                        vec![
+                            _make(Opcode::GetFree, 0),
+                            _make(Opcode::GetFree, 1),
+                            _make_noop(Opcode::Add),
+                            _make_noop(Opcode::GetLocal0),
+                            _make_noop(Opcode::Add),
+                            _make_noop(Opcode::ReturnValue),
+                        ]
+                        .concat(),
+                        1,
+                        1,
+                    ),
+                    make_fun_object(
+                        vec![
+                            _make(Opcode::GetFree, 0),
+                            _make_noop(Opcode::GetLocal0),
+                            _make_closure(0, 2),
+                            _make_noop(Opcode::ReturnValue),
+                        ]
+                        .concat(),
+                        1,
+                        1,
+                    ),
+                    make_fun_object(
+                        vec![
+                            _make_noop(Opcode::GetLocal0),
+                            _make_closure(1, 1),
+                            _make_noop(Opcode::ReturnValue),
+                        ]
+                        .concat(),
+                        1,
+                        1,
+                    ),
                 ],
                 vec![_make_closure(2, 0), _make_noop(Opcode::Pop)],
             ),
@@ -221,54 +211,48 @@ mod tests {
                     Object::Integer(66),
                     Object::Integer(77),
                     Object::Integer(88),
-                    Object::CompiledFunction(CompiledFunction {
-                        insts: Rc::new(
-                            vec![
-                                _make_const(3),
-                                _make_noop(Opcode::SetLocal0), // declare c
-                                _make_noop(Opcode::GetGlobal0), // global
-                                _make(Opcode::GetFree, 0),     // free a
-                                _make_noop(Opcode::Add),
-                                _make(Opcode::GetFree, 1), // free b
-                                _make_noop(Opcode::Add),
-                                _make_noop(Opcode::GetLocal0), // local c
-                                _make_noop(Opcode::Add),
-                                _make_noop(Opcode::ReturnValue),
-                            ]
-                            .concat(),
-                        ),
-                        num_locals: 1,
-                        num_parameters: 0,
-                    }),
-                    Object::CompiledFunction(CompiledFunction {
-                        insts: Rc::new(
-                            vec![
-                                _make_const(2),
-                                _make_noop(Opcode::SetLocal0), // declare b
-                                _make(Opcode::GetFree, 0),     // free a
-                                _make_noop(Opcode::GetLocal0),
-                                _make_closure(4, 2), // closure
-                                _make_noop(Opcode::ReturnValue),
-                            ]
-                            .concat(),
-                        ),
-                        num_locals: 1,
-                        num_parameters: 0,
-                    }),
-                    Object::CompiledFunction(CompiledFunction {
-                        insts: Rc::new(
-                            vec![
-                                _make_const(1),
-                                _make_noop(Opcode::SetLocal0), // declare a
-                                _make_noop(Opcode::GetLocal0),
-                                _make_closure(5, 1),
-                                _make_noop(Opcode::ReturnValue),
-                            ]
-                            .concat(),
-                        ),
-                        num_locals: 1,
-                        num_parameters: 0,
-                    }),
+                    make_fun_object(
+                        vec![
+                            _make_const(3),
+                            _make_noop(Opcode::SetLocal0),  // declare c
+                            _make_noop(Opcode::GetGlobal0), // global
+                            _make(Opcode::GetFree, 0),      // free a
+                            _make_noop(Opcode::Add),
+                            _make(Opcode::GetFree, 1), // free b
+                            _make_noop(Opcode::Add),
+                            _make_noop(Opcode::GetLocal0), // local c
+                            _make_noop(Opcode::Add),
+                            _make_noop(Opcode::ReturnValue),
+                        ]
+                        .concat(),
+                        1,
+                        0,
+                    ),
+                    make_fun_object(
+                        vec![
+                            _make_const(2),
+                            _make_noop(Opcode::SetLocal0), // declare b
+                            _make(Opcode::GetFree, 0),     // free a
+                            _make_noop(Opcode::GetLocal0),
+                            _make_closure(4, 2), // closure
+                            _make_noop(Opcode::ReturnValue),
+                        ]
+                        .concat(),
+                        1,
+                        0,
+                    ),
+                    make_fun_object(
+                        vec![
+                            _make_const(1),
+                            _make_noop(Opcode::SetLocal0), // declare a
+                            _make_noop(Opcode::GetLocal0),
+                            _make_closure(5, 1),
+                            _make_noop(Opcode::ReturnValue),
+                        ]
+                        .concat(),
+                        1,
+                        0,
+                    ),
                 ],
                 vec![
                     _make_const(0),
@@ -311,17 +295,15 @@ mod tests {
             fn() { num }",
                 vec![
                     Object::Integer(55),
-                    Object::CompiledFunction(CompiledFunction {
-                        insts: Rc::new(
-                            vec![
-                                _make_noop(Opcode::GetGlobal0),
-                                _make_noop(Opcode::ReturnValue),
-                            ]
-                            .concat(),
-                        ),
-                        num_locals: 0,
-                        num_parameters: 0,
-                    }),
+                    make_fun_object(
+                        vec![
+                            _make_noop(Opcode::GetGlobal0),
+                            _make_noop(Opcode::ReturnValue),
+                        ]
+                        .concat(),
+                        0,
+                        0,
+                    ),
                 ],
                 vec![
                     _make_const(0),
@@ -339,19 +321,17 @@ mod tests {
             ",
                 vec![
                     Object::Integer(55),
-                    Object::CompiledFunction(CompiledFunction {
-                        insts: Rc::new(
-                            vec![
-                                _make_const(0),
-                                _make_noop(Opcode::SetLocal0),
-                                _make_noop(Opcode::GetLocal0),
-                                _make_noop(Opcode::ReturnValue),
-                            ]
-                            .concat(),
-                        ),
-                        num_locals: 1,
-                        num_parameters: 0,
-                    }),
+                    make_fun_object(
+                        vec![
+                            _make_const(0),
+                            _make_noop(Opcode::SetLocal0),
+                            _make_noop(Opcode::GetLocal0),
+                            _make_noop(Opcode::ReturnValue),
+                        ]
+                        .concat(),
+                        1,
+                        0,
+                    ),
                 ],
                 vec![_make_closure(1, 0), _make_noop(Opcode::Pop)],
             ),
@@ -366,23 +346,21 @@ mod tests {
                 vec![
                     Object::Integer(1),
                     Object::Integer(2),
-                    Object::CompiledFunction(CompiledFunction {
-                        insts: Rc::new(
-                            vec![
-                                _make_const(0),
-                                _make_noop(Opcode::SetLocal0),
-                                _make_const(1),
-                                _make_noop(Opcode::SetLocal1),
-                                _make_noop(Opcode::GetLocal0),
-                                _make_noop(Opcode::GetLocal1),
-                                _make_noop(Opcode::Add),
-                                _make_noop(Opcode::ReturnValue),
-                            ]
-                            .concat(),
-                        ),
-                        num_locals: 2,
-                        num_parameters: 0,
-                    }),
+                    make_fun_object(
+                        vec![
+                            _make_const(0),
+                            _make_noop(Opcode::SetLocal0),
+                            _make_const(1),
+                            _make_noop(Opcode::SetLocal1),
+                            _make_noop(Opcode::GetLocal0),
+                            _make_noop(Opcode::GetLocal1),
+                            _make_noop(Opcode::Add),
+                            _make_noop(Opcode::ReturnValue),
+                        ]
+                        .concat(),
+                        2,
+                        0,
+                    ),
                 ],
                 vec![_make_closure(2, 0), _make_noop(Opcode::Pop)],
             ),
@@ -407,7 +385,8 @@ mod tests {
                 ",
                 vec![
                     Object::Integer(10),
-                    make_fun_object(
+                    make_fun_object_with_name(
+                        "sum",
                         vec![
                             _make_noop(Opcode::GetLocal0),
                             _make_noop(Opcode::GetLocal1),
@@ -426,7 +405,8 @@ mod tests {
                     Object::Integer(2),
                     Object::Integer(3),
                     Object::Integer(4),
-                    make_fun_object(
+                    make_fun_object_with_name(
+                        "outer",
                         vec![
                             _make_noop(Opcode::GetGlobal1),
                             _make_const(2),
@@ -470,8 +450,13 @@ mod tests {
                 vec![
                     Object::Integer(123),
                     Object::Integer(234),
-                    make_fun_object(
-                        vec![_make_noop(Opcode::GetLocal0), _make_noop(Opcode::ReturnValue)].concat(),
+                    make_fun_object_with_name(
+                        "one_arg",
+                        vec![
+                            _make_noop(Opcode::GetLocal0),
+                            _make_noop(Opcode::ReturnValue),
+                        ]
+                        .concat(),
                         1,
                         1,
                     ),
@@ -498,7 +483,8 @@ mod tests {
                 ",
                 vec![
                     Object::Integer(111),
-                    make_fun_object(
+                    make_fun_object_with_name(
+                        "many_arg",
                         vec![
                             _make_noop(Opcode::GetLocal0),
                             _make_noop(Opcode::GetLocal1),
@@ -568,7 +554,12 @@ mod tests {
                 one_arg(233);
                 ",
                 vec![
-                    make_fun_object(vec![_make_noop(Opcode::Return)].concat(), 1, 1),
+                    make_fun_object_with_name(
+                        "one_arg",
+                        vec![_make_noop(Opcode::Return)].concat(),
+                        1,
+                        1,
+                    ),
                     Object::Integer(233),
                 ],
                 vec![
@@ -588,7 +579,8 @@ mod tests {
                 vec![
                     Object::Integer(1),
                     Object::Integer(12),
-                    make_fun_object(
+                    make_fun_object_with_name(
+                        "m",
                         vec![
                             _make_const(0),
                             _make_const(1),
@@ -616,13 +608,15 @@ mod tests {
                 "#,
                 vec![
                     Object::Integer(1),
-                    make_fun_object(
+                    make_fun_object_with_name(
+                        "one",
                         vec![_make_const(0), _make_noop(Opcode::ReturnValue)].concat(),
                         0,
                         0,
                     ),
                     Object::Integer(2),
-                    make_fun_object(
+                    make_fun_object_with_name(
+                        "two",
                         vec![_make_const(2), _make_noop(Opcode::ReturnValue)].concat(),
                         0,
                         0,
@@ -1153,7 +1147,7 @@ mod tests {
                     // 0000
                     _make_noop(Opcode::True),
                     // 0001
-                    _make(Opcode::JumpIfNotTruthy,8),
+                    _make(Opcode::JumpIfNotTruthy, 8),
                     // 0004
                     _make_const(0),
                     // 0005
@@ -1175,7 +1169,7 @@ mod tests {
                     // 0000
                     _make_noop(Opcode::True),
                     // 0001
-                    _make(Opcode::JumpIfNotTruthy,8),
+                    _make(Opcode::JumpIfNotTruthy, 8),
                     // 0004
                     _make_const(0),
                     // 0005
@@ -1424,10 +1418,23 @@ mod tests {
         }
     }
     fn make_fun_object(insts: Vec<u8>, num_locals: usize, num_parameters: usize) -> Object {
-        Object::CompiledFunction(CompiledFunction {
-            insts: Rc::new(insts),
+        Object::CompiledFunction(CompiledFunction::new(
+            Rc::new(insts),
             num_locals,
             num_parameters,
-        })
+        ))
+    }
+    fn make_fun_object_with_name(
+        name: &str,
+        insts: Vec<u8>,
+        num_locals: usize,
+        num_parameters: usize,
+    ) -> Object {
+        Object::CompiledFunction(CompiledFunction::with_name(
+            Some(name.to_string()),
+            Rc::new(insts),
+            num_locals,
+            num_parameters,
+        ))
     }
 }

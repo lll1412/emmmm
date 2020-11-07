@@ -3,9 +3,31 @@ mod tests {
     use BinaryOperator::*;
     use Expression::*;
 
-    use crate::parser::{base::ast::*, lexer::*, parser};
     use crate::parser::base::ast::{BlockStatement, Expression};
+    use crate::parser::{base::ast::*, lexer::*, Parser};
+    #[test]
+    fn function_call(){
 
+    }
+    #[test]
+    fn name_function() {
+        let function = Statement::Function(
+            "add".to_string(),
+            vec!["x".to_string(), "y".to_string()],
+            BlockStatement {
+                statements: vec![Statement::Expression(Expression::Binary(
+                    BinaryOperator::Plus,
+                    Box::new(Expression::Identifier("x".to_string())),
+                    Box::new(Expression::Identifier("y".to_string())),
+                ))],
+            },
+        );
+        let tests = &[
+            ("fn add(x,y){x+y}", function.clone()),
+            ("let add = fn(x,y){x+y}", function),
+        ];
+        test_parse_statement_str(tests);
+    }
     #[test]
     fn for_statement() {
         let inputs = &[
@@ -175,34 +197,6 @@ mod tests {
         test_parse(&tests);
     }
 
-    fn test_parse(data: &[(String, Expression)]) {
-        for (input, expected) in data {
-            let mut parser = Parser::from(input);
-            let program = parser.parse_program();
-            // println!("{:#?}", program.statements[0]);
-            // println!("{:#?}", expected);
-            check_parser_error(parser);
-            assert_eq!(program.to_string(), expected.to_string());
-        }
-    }
-
-    fn test_parse_str(data: &[(&str, Expression)]) {
-        for (input, expected) in data {
-            let mut parser = Parser::from(input);
-            let program = parser.parse_program();
-            check_parser_error(parser);
-            assert_eq!(program.to_string(), expected.to_string());
-        }
-    }
-
-    fn test_parse_statement_str(data: &[(&str, Statement)]) {
-        for (input, expected) in data {
-            let mut parser = Parser::from(input);
-            let program = parser.parse_program();
-            check_parser_error(parser);
-            assert_eq!(program.to_string(), expected.to_string());
-        }
-    }
 
     #[test]
     fn test_function_literal_parsing() {
@@ -428,6 +422,34 @@ mod tests {
         }
     }
 
+    fn test_parse(data: &[(String, Expression)]) {
+        for (input, expected) in data {
+            let mut parser = Parser::from(input);
+            let program = parser.parse_program();
+            // println!("{:#?}", program.statements[0]);
+            // println!("{:#?}", expected);
+            check_parser_error(parser);
+            assert_eq!(program.to_string(), expected.to_string());
+        }
+    }
+
+    fn test_parse_str(data: &[(&str, Expression)]) {
+        for (input, expected) in data {
+            let mut parser = Parser::from(input);
+            let program = parser.parse_program();
+            check_parser_error(parser);
+            assert_eq!(program.to_string(), expected.to_string());
+        }
+    }
+
+    fn test_parse_statement_str(data: &[(&str, Statement)]) {
+        for (input, expected) in data {
+            let mut parser = Parser::from(input);
+            let program = parser.parse_program();
+            check_parser_error(parser);
+            assert_eq!(program.to_string(), expected.to_string());
+        }
+    }
     /// 辅助函数 测试let
     fn test_let_statement(mut parser: Parser) {
         let _program = parser.parse_program();

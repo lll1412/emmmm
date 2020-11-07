@@ -4,9 +4,9 @@ use std::fmt::{Display, Formatter, Result};
 use std::rc::Rc;
 
 use crate::compiler::code::{print_instructions, Instructions, Opcode};
-use crate::parser::base::ast::{BinaryOperator, BlockStatement, Expression, UnaryOperator};
 use crate::eval::evaluator::EvalResult;
 use crate::eval::Environment;
+use crate::parser::base::ast::{BinaryOperator, BlockStatement, Expression, UnaryOperator};
 
 pub mod builtins;
 
@@ -20,13 +20,18 @@ pub enum Object {
     String(String),
     Array(RefCell<Vec<Object>>),
     Hash(RefCell<HashMap<HashKey, Object>>),
-    Function(Vec<String>, BlockStatement, Rc<RefCell<Environment>>),
+    Function(
+        Option<String>,
+        Vec<String>,
+        BlockStatement,
+        Rc<RefCell<Environment>>,
+    ),
     // CompiledFunction(Instructions, usize, usize),
     CompiledFunction(CompiledFunction),
     Builtin(BuiltinFunction),
     /// compiled function, free variables
     // Closure(CompiledFunction, Vec<Rc<Object>>),
-    Closure(Closure),
+    Closure(Rc<Closure>),
     Return(Box<Object>),
     Null,
 }
@@ -37,25 +42,34 @@ pub struct Closure {
 }
 
 impl Closure {
-    pub fn new(compiled_function: CompiledFunction, free_variables: Vec<Rc<Object>>) -> Self {
-        Self {
+    pub fn new(compiled_function: CompiledFunction, free_variables: Vec<Rc<Object>>) -> Rc<Self> {
+        Rc::new(Self {
             compiled_function,
             free_variables,
-        }
+        })
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct CompiledFunction {
+    pub name: Option<String>,
     pub insts: Rc<Instructions>,
     pub num_locals: usize,
     pub num_parameters: usize,
 }
 
 impl CompiledFunction {
-    pub fn new(insts: Instructions, num_locals: usize, num_parameters: usize) -> Self {
-        let insts = Rc::new(insts);
+    pub fn new(insts: Rc<Instructions>, num_locals: usize, num_parameters: usize) -> Self {
+        Self::with_name(None, insts, num_locals, num_parameters)
+    }
+    pub fn with_name(
+        name: Option<String>,
+        insts: Rc<Instructions>,
+        num_locals: usize,
+        num_parameters: usize,
+    ) -> Self {
         Self {
+            name,
             insts,
             num_locals,
             num_parameters,
@@ -94,7 +108,10 @@ impl Display for HashKey {
 pub enum RuntimeError {
     StackNoElement,
     StackOverflow,
-    ArrayOutOfBound { len: usize, index: usize },
+    ArrayOutOfBound {
+        len: usize,
+        index: usize,
+    },
     UnSupportedBinOperation(Opcode, Object, Object),
     UnSupportedBinOperator(Opcode),
     ByZero(Object, Object),
@@ -124,6 +141,8 @@ pub enum RuntimeError {
     AssignUnsupported(Expression, Expression),
 
     UnsupportedHashKey(Object),
+
+    VariableHasBeenDeclared(String),
 }
 
 impl Display for RuntimeError {
@@ -200,6 +219,9 @@ impl Display for RuntimeError {
                 write!(f, "wrong argument count: expected: {}, got: {}", exp, act)
             }
             RuntimeError::NotFunction(obj) => write!(f, "{} not a function", obj),
+            RuntimeError::VariableHasBeenDeclared(name) => {
+                write!(f, "variable : {} has been declared", name)
+            }
         }
     }
 }
@@ -213,7 +235,7 @@ impl Object {
             Object::String(_) => "STRING",
             Object::Array(_) => "ARRAY",
             Object::Hash(_) => "HASH",
-            Object::Function(_, _, _) => "FUNCTION",
+            Object::Function(_, _, _, _) => "FUNCTION",
             Object::Builtin(_) => "BUILTIN_FUNCTION",
             Object::Null => "NULL",
             _ => "UNKNOWN",
@@ -239,7 +261,7 @@ impl Display for Object {
             }
             Object::Null => write!(f, "null"),
             Object::Return(obj) => write!(f, "{}", obj),
-            Object::Function(_params, _block, _env) => {
+            Object::Function(_name, _params, _block, _env) => {
                 // write!(f, "fun({}){}", params.join(", "), block)
                 write!(f, "Function")
             }
@@ -253,9 +275,7 @@ impl Display for Object {
                     .join(", ");
                 write!(f, "{{{map}}}", map = x)
             }
-            Object::CompiledFunction(cf) => {
-                write!(f, "{}", print_instructions(&cf.insts))
-            }
+            Object::CompiledFunction(cf) => write!(f, "{}", print_instructions(&cf.insts)),
             Object::Closure(cl) => write!(f, "{}", print_instructions(&cl.compiled_function.insts)),
         }
     }

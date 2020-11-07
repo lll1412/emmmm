@@ -4,13 +4,13 @@ use std::rc::Rc;
 
 #[derive(Debug, Clone)]
 pub struct Frame {
-    pub closure: Closure,
+    pub closure: Rc<Closure>,
     pub ip: usize,
     pub base_pointer: usize,
 }
 
 impl Frame {
-    pub fn new(closure: Closure, base_pointer: usize) -> Self {
+    pub fn new(closure: Rc<Closure>, base_pointer: usize) -> Self {
         Self {
             closure,
             ip: 0,

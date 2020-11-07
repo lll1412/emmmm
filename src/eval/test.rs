@@ -141,7 +141,7 @@ mod tests {
     fn test_function_object() {
         let inputs = [(
             "fn(x) {x+2;}",
-            Object::Function(
+            Object::Function(None,
                 vec!["x".to_string()],
                 BlockStatement {
                     statements: vec![Statement::Expression(Expression::Binary(
