@@ -2,11 +2,11 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use crate::compiler::code::{Opcode, read_operands, Instructions};
-use crate::object::{HashKey, Object, RuntimeError};
+use crate::compiler::code::{read_operands, Instructions, Opcode};
 use crate::object::builtins::BUILTINS;
-use crate::vm::{FALSE, NULL, TRUE, Vm, VmResult};
+use crate::object::{HashKey, Object, RuntimeError};
 use crate::vm::frame::Frame;
+use crate::vm::{Vm, VmResult, FALSE, NULL, TRUE};
 
 impl Vm {
     pub fn jump_if(&mut self, truthy: bool, ins: &Instructions, ip: usize) {
@@ -162,16 +162,17 @@ impl Vm {
                 Opcode::NotEqual => left != right,
                 _ => return Err(RuntimeError::UnSupportedBinOperator(op.clone())),
             };
-            return Ok(self.get_bool_from_cache(bool));
-        }
-        match op {
-            Opcode::Equal => Ok(self.get_bool_from_cache(left == right)),
-            Opcode::NotEqual => Ok(self.get_bool_from_cache(left != right)),
-            _ => Err(RuntimeError::UnSupportedBinOperation(
-                op.clone(),
-                Object::clone(&left),
-                Object::clone(&right),
-            )),
+            Ok(self.get_bool_from_cache(bool))
+        } else {
+            match op {
+                Opcode::Equal => Ok(self.get_bool_from_cache(left == right)),
+                Opcode::NotEqual => Ok(self.get_bool_from_cache(left != right)),
+                _ => Err(RuntimeError::UnSupportedBinOperation(
+                    op.clone(),
+                    Object::clone(&left),
+                    Object::clone(&right),
+                )),
+            }
         }
     }
     pub fn get_bool_from_cache(&self, bool: bool) -> Rc<Object> {
@@ -185,8 +186,8 @@ impl Vm {
     #[inline]
     pub fn call_function(&mut self, arg_nums: usize) -> VmResult<()> {
         self.sp -= arg_nums;
-        let callee = &*self.stack[self.sp - 1]; //往回跳过参数个数位置, 当前位置是函数
-        match callee {
+        let callee = &self.stack[self.sp - 1]; //往回跳过参数个数位置, 当前位置是函数
+        match callee.as_ref() {
             Object::Closure(closure) => {
                 if arg_nums != closure.compiled_function.num_parameters {
                     return Err(RuntimeError::WrongArgumentCount(
@@ -194,11 +195,11 @@ impl Vm {
                         arg_nums,
                     ));
                 }
-                let num_locals = closure.compiled_function.num_locals;
-                let frame = Frame::new(closure.clone(), self.sp);
+                // let num_locals = closure.compiled_function.num_locals;
+                let frame = Frame::new(callee.clone(), self.sp);
                 // Equivalent to
-                // self.sp += closure.compiled_function.num_locals;
-                self.sp = frame.base_pointer + num_locals;
+                self.sp += closure.compiled_function.num_locals;
+                // self.sp = frame.base_pointer + num_locals;
                 self.push_frame(frame); //进入函数内部（下一帧）
             }
             Object::Builtin(builtin_fun) => {
@@ -219,11 +220,6 @@ impl Vm {
         }
         Ok(())
     }
-
-    /// # 计算该指令操作数的长度，方便指令指针自增
-    pub fn _increment_num(&self, op: Opcode) -> usize {
-        op.definition().operand_width.iter().sum()
-    }
     /// # 读取一个无符号整数，并返回字节长度
 
     pub fn read_usize(&self, op_code: Opcode, ip: usize) -> (usize, usize) {
@@ -237,7 +233,7 @@ impl Vm {
     pub fn read_u16(&self, insts: &[u8], start: usize) -> usize {
         u16::from_be_bytes([insts[start], insts[start + 1]]) as usize
     }
-    #[inline]
+    // #[inline]
     pub fn _read_u8(&self, insts: &[u8], start: usize) -> usize {
         insts[start] as usize
     }
@@ -253,7 +249,7 @@ impl Vm {
         Ok(())
     }
     /// # 弹出栈顶元素
-    #[inline]
+    // #[inline]
     pub fn pop_stack(&mut self) -> VmResult {
         let o = &self.stack[self.sp - 1];
         self.sp -= 1;

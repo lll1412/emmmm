@@ -1,9 +1,10 @@
 use std::rc::Rc;
 
-use crate::compiler::{ByteCode, Constants};
-use crate::compiler::code::Opcode;
-use crate::object::{Closure, CompiledFunction, Object, RuntimeError};
-use crate::vm::frame::Frame;
+use crate::{
+    compiler::{ByteCode, code::Opcode, Constants},
+    object::{Closure, CompiledFunction, Object, RuntimeError},
+    vm::frame::Frame,
+};
 
 mod frame;
 mod r#impl;
@@ -62,7 +63,7 @@ impl Vm {
         //
         let main_fn = CompiledFunction::new(Rc::new(byte_code.instructions), 0, 0);
         let main_closure = Closure::new(main_fn, vec![]);
-        let main_frame = Frame::new(main_closure, 0);
+        let main_frame = Frame::new(Rc::new(Object::Closure(main_closure)), 0);
         let mut frames = Vec::with_capacity(MAX_FRAMES);
         frames.push(main_frame);
         Self {
@@ -78,10 +79,9 @@ impl Vm {
         }
     }
     pub fn run(&mut self) -> VmResult {
-        // let mut times_spend_record = std::collections::HashMap::new();
+        let mut _time_recorder = crate::TimeRecorder::_new();
         // ip means instruction_pointer
         while self.current_frame().ip < self.current_frame().instructions().len() {
-            // let start = std::time::Instant::now();
             let frame = self.frames.last_mut().unwrap();
             let ins = frame.instructions();
             let op_code = Opcode::from_byte(ins[frame.ip]).unwrap();
@@ -331,15 +331,13 @@ impl Vm {
                     self.current_frame_ip_inc(3);
                 }
                 Opcode::GetFree => {
-                    let (free_index, n) = self.read_usize(op_code, ip);
-                    self.push_stack(
-                        self.current_frame().closure.free_variables[free_index].clone(),
-                    )?;
-                    self.current_frame_ip_inc(n);
+                    let free_index = ins[ip] as usize;
+                    self.push_stack(self.current_frame().get_free(free_index))?;
+                    self.current_frame_ip_inc(1);
                 }
                 Opcode::CurrentClosure => {
                     let current_closure = self.current_frame().closure.clone();
-                    self.push_stack(Rc::new(Object::Closure(current_closure)))?;
+                    self.push_stack(current_closure)?;
                 }
 
                 Opcode::Assign => {
@@ -369,41 +367,9 @@ impl Vm {
                 }
                 _ => return Err(RuntimeError::UnKnownOpCode(op_code)),
             }
-            // let k = op_code as u8;
-            // let mut nv = start.elapsed().as_nanos();
-            // if times_spend_record.contains_key(&k) {
-            //     let ov = times_spend_record.get(&k).unwrap();
-            //     nv += ov;
-            // }
-            // times_spend_record.insert(k, nv);
+            // _time_recorder._tick(op_code);
         }
-        // println!("call count: {}", self.call_count);
-        // let t = 1_000_000;
-        // println!(
-        //     "sum: {}, t0: {}, t1: {}, t2: {}",
-        //     (tick_0 + tick_1 + tick_2) / t,
-        //     tick_0 / t,
-        //     tick_1 / t,
-        //     tick_2 / t
-        // );
-        // let mut map = std::collections::BTreeMap::new();
-        // let mut all = 0;
-        // for (k, v) in times_spend_record.iter() {
-        //     let op = Opcode::from_byte(*k).unwrap();
-        //     all += *v;
-        //     // map.insert(std::time::Duration::from_nanos(*v as u64), op.unwrap());
-        //     println!(
-        //         "{:?} ==> {:?}",
-        //         op,
-        //         std::time::Duration::from_nanos(*v as u64)
-        //     );
-        // }
-        // // println!("{:#?}", map.iter());
-        // // println!("{:#?}", times_spend_record.iter());
-        // println!(
-        //     "解析运行指令用时: {:?}",
-        //     std::time::Duration::from_nanos(all as u64)
-        // );
+        // _time_recorder._print_sorted_record();
         self.last_popped_stack_element()
     }
 }

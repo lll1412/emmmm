@@ -31,7 +31,7 @@ pub enum Object {
     Builtin(BuiltinFunction),
     /// compiled function, free variables
     // Closure(CompiledFunction, Vec<Rc<Object>>),
-    Closure(Rc<Closure>),
+    Closure(Closure),
     Return(Box<Object>),
     Null,
 }
@@ -42,11 +42,11 @@ pub struct Closure {
 }
 
 impl Closure {
-    pub fn new(compiled_function: CompiledFunction, free_variables: Vec<Rc<Object>>) -> Rc<Self> {
-        Rc::new(Self {
+    pub fn new(compiled_function: CompiledFunction, free_variables: Vec<Rc<Object>>) -> Self {
+        Self {
             compiled_function,
             free_variables,
-        })
+        }
     }
 }
 

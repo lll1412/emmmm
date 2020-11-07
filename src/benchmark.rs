@@ -18,13 +18,14 @@ pub fn benchmark(engine: Engine) {
     // optimized 3, n = 35, takes 3.4s.//rust更新1.47之后变4.4s了
     // optimized 4, n = 35, takes 3.35s
     // optimized 5, n = 35, takes 2.3s, n = 36, takes 4.4s
+    // optimized 6, n = 35, takes 2.25s, n = 36, takes 4.4s
     let n = 36;
     let code = &format!(
         r"let fibonacci = fn(x) {{
              if x < 2 {{
-                 return x;
+                 return x
              }} else {{
-                 return fibonacci(x - 1) + fibonacci(x - 2);
+                 return fibonacci(x - 1) + fibonacci(x - 2)
              }}
          }};
          fibonacci({})

@@ -1,18 +1,21 @@
-use crate::compiler::{Compiler, Constants, RcSymbolTable};
-use crate::parser::base::ast::Program;
-use crate::eval::evaluator;
-use crate::eval::evaluator::Env;
-use crate::vm::{Globals, Vm};
 use std::cell::RefCell;
 use std::fmt;
 use std::rc::Rc;
 use std::time::Instant;
 
+use compiler::code::Opcode;
+
+use crate::compiler::{Compiler, Constants, RcSymbolTable};
+use crate::eval::evaluator;
+use crate::eval::evaluator::Env;
+use crate::parser::base::ast::Program;
+use crate::vm::{Globals, Vm};
+
 pub mod benchmark;
 mod compiler;
-mod parser;
 mod eval;
 mod object;
+mod parser;
 pub mod repl;
 mod vm;
 
@@ -83,5 +86,61 @@ pub fn exe_with_vm(
             }
         }
         Err(com_err) => eprintln!("{:?}", com_err),
+    }
+}
+pub struct TimeRecorder {
+    _start: std::time::Instant,
+    _record_map: std::collections::HashMap<u8, RefCell<Pair>>,
+}
+#[derive(Default, Debug)]
+struct Pair<T = u128, C = u64> {
+    time: T,
+    count: C,
+}
+impl TimeRecorder {
+    fn _new() -> Self {
+        Self {
+            _start: std::time::Instant::now(),
+            _record_map: Default::default(),
+        }
+    }
+    fn _tick(&mut self, key: Opcode) {
+        let key = key as u8;
+        let time = self._start.elapsed().as_nanos();
+        if self._record_map.contains_key(&key) {
+            let mut pair = self._record_map[&key].borrow_mut();
+            pair.count += 1;
+            pair.time += time;
+        } else {
+            self._record_map.insert(key, RefCell::new(Pair::default()));
+        }
+        self._start = std::time::Instant::now();
+    }
+    fn _print_sorted_record(&self) {
+        let mut map = std::collections::BTreeMap::new();
+        let mut time_all = 0;
+        for (k, v) in self._record_map.iter() {
+            let v = v.borrow();
+            time_all += v.time;
+            map.insert(
+                std::time::Duration::from_nanos(v.time as u64),
+                Pair {
+                    time: Opcode::from_byte(*k).unwrap(),
+                    count: v,
+                },
+            );
+            // println!(
+            //     "{:?} ==> {:?}",
+            //     op,
+            //     std::time::Duration::from_nanos(*v as u64)
+            // );
+        }
+        for (k, v) in map.iter_mut() {
+            println!("{:?} ==> {:?}", v, k);
+        }
+        println!(
+            "解析运行指令用时: {:?}",
+            std::time::Duration::from_nanos(time_all as u64)
+        );
     }
 }

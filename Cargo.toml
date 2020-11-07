@@ -7,5 +7,8 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [profile.release]
 panic = "abort"
+#lto = "fat"
+codegen-units = 1
+#incremental = true
 
 [dependencies]
