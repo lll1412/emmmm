@@ -43,10 +43,10 @@ fn has_flag(flag: &str) -> bool {
     std::env::args().any(|arg| arg == flag)
 }
 pub fn eval_or_compile() -> Engine {
-    if has_flag("--compile") {
-        Engine::Compile
-    } else {
+    if has_flag("--eval") {
         Engine::Eval
+    } else {
+        Engine::Compile
     }
 }
 pub fn current_mode() -> Mode {
@@ -81,6 +81,7 @@ pub fn exe_with_vm(
                 Ok(object) => {
                     println!("Output: {}", object);
                     println!("takes {} ms", start.elapsed().as_millis());
+                    // println!("globals: \n{:#?}", globals);
                 }
                 Err(vm_err) => eprintln!("Error: {:?}", vm_err),
             }

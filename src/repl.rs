@@ -1,12 +1,10 @@
 use std::io;
 use std::io::Write;
-use std::rc::Rc;
 
+use crate::{create_rc_ref_cell, Engine, exe_with_eval, exe_with_vm};
 use crate::compiler::symbol_table::SymbolTable;
 use crate::eval::Environment;
-use crate::object::Object;
 use crate::parser::Parser;
-use crate::{create_rc_ref_cell, exe_with_eval, exe_with_vm, Engine};
 
 const PROMPT: &str = ">> ";
 const TAB: &str = "   ";
@@ -19,7 +17,7 @@ pub fn start(engine: Engine) {
     //for eval
     let env = create_rc_ref_cell(Environment::new());
     //for compiler and vm
-    let globals = Vec::<Rc<Object>>::new();
+    let globals = create_rc_ref_cell(vec![]);
     let symbol_table = create_rc_ref_cell(SymbolTable::new());
     let constants = vec![];
 

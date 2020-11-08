@@ -9,6 +9,7 @@ use crate::object::{CompiledFunction, Object};
 use crate::parser::base::ast::{
     BinaryOperator, BlockStatement, Expression, Program, Statement, UnaryOperator,
 };
+use std::prelude::v1::Option::Some;
 
 pub mod code;
 pub mod symbol_table;
@@ -189,20 +190,43 @@ impl Compiler {
             },
             Statement::Expression(expr) => {
                 self.compile_expression(expr)?;
-                if !self.last_instruction_is(Opcode::Assign) {
-                    self.emit(Opcode::Pop, vec![]);
+                if let Expression::Binary(bin_op, _, _) = expr {
+                    if bin_op == &BinaryOperator::Assign {
+                        //赋值表达式末尾不添加Pop指令
+                        return Ok(());
+                    }
                 }
+                self.emit(Opcode::Pop, vec![]);
             }
             Statement::Comment(_comment) => {
                 //todo ignore comment
             }
-            // Statement::For(init, cond, after, blocks) => panic!(),
+            Statement::For(init, cond, after, blocks) => {
+                if let Some(init) = init.as_deref() {
+                    self.compile_statement(init)?;
+                }
+                let tag = self.cur_instruction_len();
+
+                let mut jump_if_pos = 0; //当前值随意，如果不跳出循环，永远用不到，如果能跳出循环，一定设置为了正确值
+                if let Some(cond) = cond {
+                    self.compile_expression(cond)?;
+                    jump_if_pos = self.get_jump_if_pos()?;
+                    self.compile_block_statement(blocks)?;
+                    if let Some(after) = after {
+                        self.compile_expression(after)?;
+                    }
+                }
+                //始终跳转到tag处
+                self.emit(Opcode::JumpAlways, vec![tag]);
+                //if不成立则跳转到此处
+                let after_blocks = self.cur_instruction_len();
+                self.change_operand(jump_if_pos, after_blocks);
+            }
             Statement::Function(name, args, blocks) => {
                 let symbol = self.symbol_table.borrow_mut().define(name);
                 self.compile_function_expression(Some(name.clone()), args, blocks)?;
                 self.store_symbol(symbol);
-            }
-            _ => unimplemented!(),
+            } // _ => unimplemented!(),
         }
         Ok(())
     }
@@ -291,15 +315,7 @@ impl Compiler {
             }
             Expression::If(cond, cons, alt) => {
                 self.compile_expression(cond)?;
-                let jump_if_pos;
-                if self.last_instruction_is(Opcode::LessThan) {
-                    //如果是小于比较运算
-                    self.remove_last_instruction()?; //移除小于指令
-                    jump_if_pos = self.emit(Opcode::JumpIfLess, vec![9999]); //替换指令
-                } else {
-                    //不变
-                    jump_if_pos = self.emit(Opcode::JumpIfNotTruthy, vec![9999]);
-                }
+                let jump_if_pos = self.get_jump_if_pos()?;
                 //条件不成立跳转的位置
                 // let jump_if_not_truthy_pos = self.emit(Opcode::JumpIfNotTruthy, vec![9999]);
                 self.compile_block_statement(cons)?;
@@ -438,6 +454,27 @@ impl Compiler {
         }
         Ok(())
     }
+    fn compile_assign(&mut self, name: &str) -> CompileResult<()> {
+        let option = self.symbol_table.borrow_mut().resolve(name);
+        let symbol = match option {
+            None => return Err(CompileError::UndefinedIdentifier(name.to_string())),
+            Some(symbol) => symbol,
+        };
+        self.store_symbol(symbol);
+        Ok(())
+    }
+    fn get_jump_if_pos(&mut self) -> CompileResult<usize> {
+        let jump_if_pos;
+        if self.last_instruction_is(Opcode::LessThan) {
+            //如果是小于比较运算
+            self.remove_last_instruction()?; //移除小于指令
+            jump_if_pos = self.emit(Opcode::JumpIfNotLess, vec![9999]); //替换指令
+        } else {
+            //不变
+            jump_if_pos = self.emit(Opcode::JumpIfNotTruthy, vec![9999]);
+        }
+        Ok(jump_if_pos)
+    }
     /// 常量池添加常量，返回常量索引
     fn add_constant(&mut self, constant: Object) -> usize {
         self.constants.push(Rc::new(constant));
@@ -559,8 +596,8 @@ impl Compiler {
             SymbolScope::Free => Opcode::GetFree,
             SymbolScope::Function => {
                 self.emit(Opcode::CurrentClosure, vec![]);
-                return Ok(())
-            },
+                return Ok(());
+            }
         };
         self.emit(op, vec![symbol.index]);
         Ok(())
@@ -569,7 +606,19 @@ impl Compiler {
     fn store_symbol(&mut self, symbol: Rc<Symbol>) {
         match symbol.scope {
             SymbolScope::Global => {
-                self.emit(Opcode::SetGlobal, vec![symbol.index]);
+                let i = symbol.index;
+                let op = match i {
+                    0 => Opcode::SetGlobal0,
+                    1 => Opcode::SetGlobal1,
+                    2 => Opcode::SetGlobal2,
+                    3 => Opcode::SetGlobal3,
+                    4 => Opcode::SetGlobal4,
+                    _ => {
+                        self.emit(Opcode::SetLocal, vec![i]);
+                        return;
+                    }
+                };
+                self.emit(op, vec![]);
             }
             SymbolScope::Local => {
                 let i = symbol.index;
@@ -592,16 +641,6 @@ impl Compiler {
 
     fn symbol_table_len(&self) -> usize {
         self.symbol_table.borrow().num_definitions
-    }
-    fn compile_assign(&mut self, name: &str) -> CompileResult<()> {
-        let option = self.symbol_table.borrow_mut().resolve(name);
-        match option {
-            None => {
-                return Err(CompileError::UndefinedIdentifier(name.to_string()));
-            }
-            Some(symbol) => self.emit(Opcode::Assign, vec![symbol.index]),
-        };
-        Ok(())
     }
 }
 

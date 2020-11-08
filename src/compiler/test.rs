@@ -3,11 +3,11 @@ mod tests {
     use std::collections::HashMap;
     use std::rc::Rc;
 
-    use crate::compiler::{Compiler, Instructions};
     use crate::compiler::code::{
-        self, _make, _make_closure, _make_const, _make_noop, make, Opcode, print_instructions,
+        self, _make, _make_closure, _make_const, _make_noop, make, print_instructions, Opcode,
     };
     use crate::compiler::symbol_table::{Symbol, SymbolScope, SymbolTable};
+    use crate::compiler::{Compiler, Instructions};
     use crate::create_rc_ref_cell;
     use crate::object::{CompiledFunction, Object};
     use crate::parser::base::ast::Program;
@@ -27,7 +27,35 @@ mod tests {
             }
         };
     }
+    #[test]
+    fn for_statement() {
+        let inputs = vec![(
+            r"
+            for(let i = 0; i < 10; i = i + 1) {
 
+            }
+            ",
+            vec![Object::Integer(0), Object::Integer(10), Object::Integer(1)],
+            vec![
+                //init
+                _make_const(0),// 0
+                _make_noop(Opcode::SetGlobal0),// 1
+                //cond
+                _make_noop(Opcode::GetGlobal0),// 2
+                _make_const(1),// 3
+                _make(Opcode::JumpIfNotLess, 11+3),// 4
+                //loop blocks
+                //after
+                _make_noop(Opcode::GetGlobal0),// 7
+                _make_const(2),//8
+                _make_noop(Opcode::Add),//9
+                _make_noop(Opcode::SetGlobal0),//10
+                //always jump to start
+                _make(Opcode::JumpAlways, 2),//11
+            ],
+        )];
+        run_compile_test(inputs);
+    }
     #[test]
     fn recursive_function() {
         let count_down_const = make_fun_object_with_name(
@@ -59,7 +87,7 @@ mod tests {
                 ],
                 vec![
                     _make_closure(1, 0),
-                    _make(Opcode::SetGlobal, 0),
+                    _make_noop(Opcode::SetGlobal0),
                     _make_noop(Opcode::GetGlobal0),
                     _make_const(2),
                     _make(Opcode::Call, 1),
@@ -98,7 +126,7 @@ mod tests {
                 ],
                 vec![
                     _make_closure(3, 0),
-                    _make(Opcode::SetGlobal, 0),
+                    _make_noop(Opcode::SetGlobal0),
                     _make_noop(Opcode::GetGlobal0),
                     _make(Opcode::Call, 0),
                     _make_noop(Opcode::Pop),
@@ -256,7 +284,7 @@ mod tests {
                 ],
                 vec![
                     _make_const(0),
-                    _make(Opcode::SetGlobal, 0),
+                    _make_noop(Opcode::SetGlobal0),
                     _make_closure(6, 0),
                     _make_noop(Opcode::Pop),
                 ],
@@ -307,7 +335,7 @@ mod tests {
                 ],
                 vec![
                     _make_const(0),
-                    _make(Opcode::SetGlobal, 0),
+                    _make_noop(Opcode::SetGlobal0),
                     _make_closure(1, 0),
                     _make_noop(Opcode::Pop),
                 ],
@@ -428,11 +456,11 @@ mod tests {
                 ],
                 vec![
                     _make_const(0),
-                    _make(Opcode::SetGlobal, 0),
+                    _make_noop(Opcode::SetGlobal0),
                     _make_closure(1, 0),
-                    _make(Opcode::SetGlobal, 1),
+                    _make_noop(Opcode::SetGlobal1),
                     _make_closure(6, 0),
-                    _make(Opcode::SetGlobal, 2),
+                    _make_noop(Opcode::SetGlobal2),
                     _make_noop(Opcode::GetGlobal2),
                     _make(Opcode::Call, 0),
                     _make_noop(Opcode::GetGlobal0),
@@ -464,11 +492,11 @@ mod tests {
                 ],
                 vec![
                     _make_const(0),
-                    _make(Opcode::SetGlobal, 0),
+                    _make_noop(Opcode::SetGlobal0),
                     _make_const(1),
-                    _make(Opcode::SetGlobal, 1),
+                    _make_noop(Opcode::SetGlobal1),
                     _make_closure(2, 0),
-                    _make(Opcode::SetGlobal, 2),
+                    _make_noop(Opcode::SetGlobal2),
                     _make_noop(Opcode::GetGlobal2),
                     _make_const(3),
                     _make(Opcode::Call, 1),
@@ -505,9 +533,9 @@ mod tests {
                 ],
                 vec![
                     _make_const(0),
-                    _make(Opcode::SetGlobal, 0),
+                    _make_noop(Opcode::SetGlobal0),
                     _make_closure(1, 0),
-                    _make(Opcode::SetGlobal, 1),
+                    _make_noop(Opcode::SetGlobal1),
                     _make_noop(Opcode::GetGlobal1),
                     _make_const(2),
                     _make_const(3),
@@ -564,7 +592,7 @@ mod tests {
                 ],
                 vec![
                     _make_closure(0, 0),
-                    _make(Opcode::SetGlobal, 0),
+                    _make_noop(Opcode::SetGlobal0),
                     _make_noop(Opcode::GetGlobal0),
                     _make_const(1),
                     _make(Opcode::Call, 1),
@@ -594,7 +622,7 @@ mod tests {
                 ],
                 vec![
                     _make_closure(2, 0),
-                    _make(Opcode::SetGlobal, 0),
+                    _make_noop(Opcode::SetGlobal0),
                     _make_noop(Opcode::GetGlobal0),
                     _make(Opcode::Call, 0),
                     _make_noop(Opcode::Pop),
@@ -625,10 +653,10 @@ mod tests {
                 vec![
                     // let one = fn1
                     _make_closure(1, 0),
-                    _make(Opcode::SetGlobal, 0),
+                    _make_noop(Opcode::SetGlobal0),
                     // let two = fn2
                     _make_closure(3, 0),
-                    _make(Opcode::SetGlobal, 1),
+                    _make_noop(Opcode::SetGlobal1),
                     // one()
                     _make_noop(Opcode::GetGlobal0),
                     _make(Opcode::Call, 0),
@@ -716,9 +744,9 @@ mod tests {
                 vec![Object::Integer(1), Object::Integer(2)],
                 vec![
                     _make_const(0),
-                    _make(Opcode::SetGlobal, 0),
+                    _make_noop(Opcode::SetGlobal0),
                     _make_const(1),
-                    _make(Opcode::Assign, 0),
+                    _make_noop(Opcode::SetGlobal0),
                     _make_noop(Opcode::GetGlobal0),
                     _make_noop(Opcode::Pop),
                 ],
@@ -737,11 +765,11 @@ mod tests {
                     _make_const(0),
                     _make_const(1),
                     _make_const(2),
-                    make(Opcode::Array, vec![3]),     //声明赋值数组
-                    make(Opcode::SetGlobal, vec![0]), //存arr
+                    _make(Opcode::Array, 3),     //声明赋值数组
+                    _make_noop(Opcode::SetGlobal0), //存arr
                     _make_const(3),                   //index
                     _make_const(4),                   //value
-                    _make(Opcode::Assign, 0),         //arr[index] = value
+                    _make_noop(Opcode::SetGlobal0),         //arr[index] = value
                     _make_noop(Opcode::GetGlobal0),   //取arr
                     // make(Opcode::Constant, vec![5]),  //index
                     // make(Opcode::Index, vec![]),      //arr[index]
@@ -777,10 +805,10 @@ mod tests {
                     _make_const(7),
                     _make_const(8),
                     _make(Opcode::Hash, 3),
-                    _make(Opcode::SetGlobal, 0),    //声明初始化Map
+                    _make_noop(Opcode::SetGlobal0),    //声明初始化Map
                     _make_const(9),                 //index
                     _make_const(10),                //value
-                    _make(Opcode::Assign, 0),       //map[index] = value
+                    _make_noop(Opcode::SetGlobal0),       //map[index] = value
                     _make_noop(Opcode::GetGlobal0), //取map
                     _make_noop(Opcode::Pop),
                 ],
@@ -1123,9 +1151,9 @@ mod tests {
             vec![Object::Integer(1), Object::Integer(2)],
             vec![
                 _make_const(0),
-                _make(Opcode::SetGlobal, 0),
+                _make_noop(Opcode::SetGlobal0),
                 _make_const(1),
-                _make(Opcode::SetGlobal, 1),
+                _make_noop(Opcode::SetGlobal1),
                 _make_noop(Opcode::GetGlobal0),
                 _make_noop(Opcode::Pop),
             ],

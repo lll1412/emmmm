@@ -4,8 +4,8 @@ mod tests {
     use std::collections::HashMap;
 
     use crate::compiler::Compiler;
-    use crate::parser::base::ast::Program;
     use crate::object::{HashKey, Object, RuntimeError};
+    use crate::parser::base::ast::Program;
     use crate::vm::Vm;
     use std::time::Instant;
 
@@ -23,6 +23,20 @@ mod tests {
             map
             }
         };
+    }
+    #[test]
+    fn for_statement() {
+        let inputs = vec![(
+            r"
+            let b = 1;
+            for(let i = 0; i < 100; i = i + 1) {
+                b = b + 1;
+            }
+            b
+        ",
+            Object::Integer(101),
+        )];
+        run_vm_test(inputs);
     }
     #[test]
     fn recursive_fibonacci() {
@@ -403,7 +417,11 @@ mod tests {
     #[test]
     fn test_let_statement() {
         let tests = vec![
-            ("let a= 1;a", Object::Integer(1)),
+            (r"
+            let i= 1
+            let j = 2
+            i
+            ", Object::Integer(1)),
             ("let a= 1;let b = 2;a+b", Object::Integer(3)),
             ("let a= 1;let b = a + a;a+b", Object::Integer(3)),
         ];
@@ -500,7 +518,7 @@ mod tests {
                                 println!("{}", x);
                             }
                             panic!("Input: {}\nRuntime Error: {:?}", input, e)
-                        },
+                        }
                     };
                 }
                 Err(e) => panic!("Input: {}\nCompile Error: {:?}", input, e),

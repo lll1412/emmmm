@@ -83,11 +83,17 @@ op_build!(
         Not(),
         //跳转指令
         JumpIfNotTruthy(2),
-        JumpIfLess(2),
+        JumpIfNotLess(2),
         // JumpIfNotEq(2),
         JumpAlways(2),
         //全局变量绑定
         SetGlobal(2),
+        SetGlobal0(),
+        SetGlobal1(),
+        SetGlobal2(),
+        SetGlobal3(),
+        SetGlobal4(),
+
         GetGlobal(2),
         GetGlobal0(),
         GetGlobal1(),
@@ -115,7 +121,7 @@ op_build!(
         CurrentClosure(),
         GetFree(1),
         // 赋值操作
-        Assign(2),
+        // Assign(2),//用SetGlobal/SetLocal代替
         // 函数调用(arg_len)
         Call(1),
         // 函数返回值

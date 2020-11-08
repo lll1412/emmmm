@@ -19,11 +19,11 @@ impl Vm {
     /// # 执行非运算
     pub fn execute_not_expression(&mut self, value: &Object) -> VmResult<()> {
         if *value == TRUE {
-            self.push_stack(self.bool_cache_false.clone())?;
+            self.push_stack(self.bool_cache_false.clone());
         } else if *value == FALSE {
-            self.push_stack(self.bool_cache_true.clone())?;
+            self.push_stack(self.bool_cache_true.clone());
         } else if *value == NULL {
-            self.push_stack(self.null_cache.clone())?;
+            self.push_stack(self.null_cache.clone());
         } else {
             return Err(RuntimeError::UnSupportedUnOperation(
                 Opcode::Not,
@@ -33,39 +33,59 @@ impl Vm {
         Ok(())
     }
     /// # 执行赋值操作
-    pub fn execute_assign_operation(&mut self, global_index: usize) -> VmResult<()> {
-        let obj = &self.get_global(global_index)?;
-        match obj.as_ref() {
-            //数组赋值
-            Object::Array(items) => {
-                let val = &self.pop_stack()?;
-                let index = &self.pop_stack()?;
-                if let Object::Integer(i) = index.as_ref() {
-                    items.borrow_mut()[*i as usize] = Object::clone(val);
+    pub fn execute_assign_operation_or_pop_and_set_global(&mut self, index: usize, is_local: bool) -> VmResult<()> {
+        let opt = if is_local {
+            self.get_local(index)
+        } else {
+            self.get_global(index)
+        };
+        match opt {
+            None => {
+                //声明
+                if is_local {
+                    self.pop_and_set_local(index);
                 } else {
-                    return Err(RuntimeError::UnSupportedIndexOperation(
-                        Object::clone(obj),
-                        Object::clone(index),
-                    ));
+                    self.pop_and_set_global(index);
                 }
             }
-            // Hash赋值
-            Object::Hash(pairs) => {
-                let val = &self.pop_stack()?;
-                let index = &self.pop_stack()?;
-                let key = HashKey::from_object(index)?;
-                pairs.borrow_mut().insert(key, Object::clone(val));
-            }
-            //普通赋值
-            _ => {
-                let popped = self.pop_stack()?;
-                self.set_global(global_index, popped);
+            Some(obj) => {
+                //赋值
+                match obj.as_ref() {
+                    //数组赋值
+                    Object::Array(items) => {
+                        let val = self.pop_stack();
+                        let index = self.pop_stack();
+                        if let Object::Integer(i) = index.as_ref() {
+                            items.borrow_mut()[*i as usize] = Object::clone(&val);
+                        } else {
+                            return Err(RuntimeError::UnSupportedIndexOperation(
+                                Object::clone(&obj),
+                                Object::clone(&index),
+                            ));
+                        }
+                    }
+                    // // Hash赋值
+                    Object::Hash(pairs) => {
+                        let val = self.pop_stack();
+                        let index = self.pop_stack();
+                        let key = HashKey::from_object(&*index)?;
+                        pairs.borrow_mut().insert(key, Object::clone(&val));
+                    }
+                    //普通赋值
+                    _ => {
+                        if is_local {
+                            self.pop_and_set_local(index);
+                        } else {
+                            self.pop_and_set_global(index);
+                        }
+                    }
+                }
             }
         }
         Ok(())
     }
     /// # 创建数组
-    pub fn build_array(&mut self, arr_len: usize) -> VmResult<()> {
+    pub fn build_array(&mut self, arr_len: usize){
         let mut arr = vec![];
         for i in self.sp - arr_len..self.sp {
             let el = &self.stack[i];
@@ -86,13 +106,14 @@ impl Vm {
             i += 2;
         }
         self.sp -= hash_len;
-        self.push_stack(Rc::new(Object::Hash(RefCell::new(hash))))
+        self.push_stack(Rc::new(Object::Hash(RefCell::new(hash))));
+        Ok(())
     }
     /// # 执行二元操作
     #[inline]
     pub fn execute_binary_operation(&mut self, op: &Opcode) -> VmResult {
-        let right = &*self.pop_stack()?;
-        let left = &*self.pop_stack()?;
+        let right = &*self.pop_stack();
+        let left = &*self.pop_stack();
         match (left, right) {
             (Object::Integer(left_val), Object::Integer(right_val)) => {
                 let r = match op {
@@ -152,8 +173,8 @@ impl Vm {
     }
     /// # 执行比较操作
     pub fn execute_comparison_operation(&mut self, op: &Opcode) -> VmResult {
-        let right = self.pop_stack()?;
-        let left = self.pop_stack()?;
+        let right = self.pop_stack();
+        let left = self.pop_stack();
         if let (Object::Integer(left), Object::Integer(right)) = (left.as_ref(), right.as_ref()) {
             let bool = match op {
                 Opcode::GreaterThan => left > right,
@@ -210,7 +231,7 @@ impl Vm {
                     v.push(Object::clone(rc));
                 }
                 let r = builtin_fun(v)?;
-                self.push_stack(Rc::new(r))?;
+                self.push_stack(Rc::new(r));
             }
             _ => {
                 return Err(RuntimeError::CustomErrMsg(
@@ -238,36 +259,53 @@ impl Vm {
         insts[start] as usize
     }
     /// # 压入栈中
-    pub fn push_stack(&mut self, object: Rc<Object>) -> VmResult<()> {
+    pub fn push_stack(&mut self, object: Rc<Object>) {
         if self.sp == self.stack.len() {
             self.stack.push(object);
         } else {
-            //之前是insert方法，换索引赋值速度快了很多
             self.stack[self.sp] = object;
         }
         self.sp += 1;
-        Ok(())
     }
     /// # 弹出栈顶元素
     // #[inline]
-    pub fn pop_stack(&mut self) -> VmResult {
-        let o = &self.stack[self.sp - 1];
+    pub fn pop_stack(&mut self) -> Rc<Object> {
         self.sp -= 1;
-        Ok(o.clone())
+        self.stack[self.sp].clone()
     }
 
-    /// # 存入全局变量
-    pub fn set_global(&mut self, global_index: usize, global: Rc<Object>) {
-        if global_index == self.globals.len() {
-            self.globals.push(global);
+    /// # 栈顶元素存入全局变量
+    pub fn pop_and_set_global(&mut self, global_index: usize) {
+        let global = self.pop_stack();
+        if global_index >= self.globals.borrow().len() {
+            self.globals.borrow_mut().push(global);
         } else {
-            self.globals[global_index] = global;
+            self.globals.borrow_mut()[global_index] = global;
         }
     }
+    /// # 弹出栈顶元素并设置到指定位置
+    pub fn pop_and_set_local(&mut self, local_index: usize) {
+        let popped = self.pop_stack();
+        let frame = self.frames.last().unwrap();
+        self.stack[frame.base_pointer + local_index] = popped;
+    }
     /// # 取出全局变量
-    pub fn get_global(&self, global_index: usize) -> VmResult {
-        let object = self.globals[global_index].clone();
-        Ok(object)
+    pub fn get_global(&self, global_index: usize) -> Option<Rc<Object>> {
+        self.globals.borrow().get(global_index).cloned()
+    }
+    pub fn get_local(&mut self, local_index: usize) -> Option<Rc<Object>> {
+        let frame = self.frames.last().unwrap();
+        self.stack.get(frame.base_pointer + local_index).cloned()
+    }
+    /// # 取出局部变量并压入栈顶
+    pub fn get_local_and_push(&mut self, local_index: usize){
+        let object = self.get_local(local_index).unwrap();
+        self.push_stack(object)
+    }
+    /// # 取出全局变量并压入栈顶
+    pub fn get_global_and_push(&mut self, global_index: usize) {
+        let object = self.get_global(global_index).unwrap();
+        self.push_stack(object)
     }
     pub fn get_builtin(&self, builtin_index: usize) -> VmResult {
         let builtin_fun = &BUILTINS[builtin_index];
