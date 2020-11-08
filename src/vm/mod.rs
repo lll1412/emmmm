@@ -1,9 +1,9 @@
-use std::cell::RefCell;
 use crate::create_rc_ref_cell;
+use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::{
-    compiler::{ByteCode, code::Opcode, Constants},
+    compiler::{code::Opcode, ByteCode, Constants},
     object::{Closure, CompiledFunction, Object, RuntimeError},
     vm::frame::Frame,
 };
@@ -148,7 +148,9 @@ impl Vm {
                 }
 
                 Opcode::Pop => {
-                    self.sp -= 1;
+                    if self.sp > 0 {
+                        self.sp -= 1;
+                    }
                 }
 
                 Opcode::True => {
@@ -158,7 +160,7 @@ impl Vm {
                     self.push_stack(self.bool_cache_false.clone());
                 }
 
-                Opcode::Equal | Opcode::NotEqual | Opcode::GreaterThan | Opcode::LessThan => {
+                Opcode::Equal | Opcode::NotEqual | Opcode::GreaterThan | Opcode::LessThan |Opcode::GreaterEq|Opcode::LessEq => {
                     let bool_object = self.execute_comparison_operation(&op_code)?;
                     self.push_stack(bool_object);
                 }
@@ -205,6 +207,7 @@ impl Vm {
 
                 Opcode::Null => {
                     self.push_stack(self.null_cache.clone());
+                    self.sp -= 1;
                 }
                 // set global
                 Opcode::SetGlobal => {

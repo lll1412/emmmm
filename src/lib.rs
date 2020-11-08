@@ -1,9 +1,9 @@
+use compiler::code::Opcode;
 use std::cell::RefCell;
+use std::env;
 use std::fmt;
 use std::rc::Rc;
 use std::time::Instant;
-
-use compiler::code::Opcode;
 
 use crate::compiler::{Compiler, Constants, RcSymbolTable};
 use crate::eval::evaluator;
@@ -40,7 +40,7 @@ impl fmt::Display for Engine {
     }
 }
 fn has_flag(flag: &str) -> bool {
-    std::env::args().any(|arg| arg == flag)
+    env::args().any(|arg| arg == flag)
 }
 pub fn eval_or_compile() -> Engine {
     if has_flag("--eval") {
@@ -59,11 +59,19 @@ pub fn current_mode() -> Mode {
 pub fn exe_with_eval(program: &Program, env: &Env) {
     let result = evaluator::eval(program, env.clone());
     match result {
-        Ok(object) => println!("Output: {}", object),
+        Ok(object) => println!("{}", object),
         Err(err) => eprintln!("Error: {}", err),
     }
 }
 
+pub fn parse_file() -> Option<String> {
+    for arg in env::args() {
+        if arg.ends_with(".my") {
+            return Some(arg);
+        }
+    }
+    None
+}
 pub fn exe_with_vm(
     program: &Program,
     symbol_table: RcSymbolTable,
@@ -75,12 +83,12 @@ pub fn exe_with_vm(
     match result {
         Ok(byte_code) => {
             let mut vm = Vm::with_global_store(byte_code, globals.clone());
-            let start = Instant::now();
+            let _start = Instant::now();
             let result = vm.run();
             match result {
                 Ok(object) => {
-                    println!("Output: {}", object);
-                    println!("takes {} ms", start.elapsed().as_millis());
+                    println!("{}", object);
+                    // println!("takes {} ms", _start.elapsed().as_millis());
                     // println!("globals: \n{:#?}", globals);
                 }
                 Err(vm_err) => eprintln!("Error: {:?}", vm_err),

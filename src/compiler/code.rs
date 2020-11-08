@@ -77,7 +77,9 @@ op_build!(
         Equal(),
         NotEqual(),
         GreaterThan(),
+        GreaterEq(),
         LessThan(),
+        LessEq(),
         //一元运算符
         Neg(),
         Not(),

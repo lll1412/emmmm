@@ -56,6 +56,7 @@ mod tests {
                 _make_noop(Opcode::SetGlobal0),//16
                 //always jump to start
                 _make(Opcode::JumpAlways, 2),//17
+                _make_noop(Opcode::Null)
             ],
         )];
         run_compile_test(inputs);

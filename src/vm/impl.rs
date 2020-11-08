@@ -2,11 +2,11 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use crate::compiler::code::{read_operands, Instructions, Opcode};
-use crate::object::builtins::BUILTINS;
+use crate::compiler::code::{Instructions, Opcode, read_operands};
 use crate::object::{HashKey, Object, RuntimeError};
+use crate::object::builtins::BUILTINS;
+use crate::vm::{FALSE, NULL, TRUE, Vm, VmResult};
 use crate::vm::frame::Frame;
-use crate::vm::{Vm, VmResult, FALSE, NULL, TRUE};
 
 impl Vm {
     pub fn jump_if(&mut self, truthy: bool, ins: &Instructions, ip: usize) {
@@ -33,7 +33,11 @@ impl Vm {
         Ok(())
     }
     /// # 执行赋值操作
-    pub fn execute_assign_operation_or_pop_and_set_global(&mut self, index: usize, is_local: bool) -> VmResult<()> {
+    pub fn execute_assign_operation_or_pop_and_set_global(
+        &mut self,
+        index: usize,
+        is_local: bool,
+    ) -> VmResult<()> {
         let opt = if is_local {
             self.get_local(index)
         } else {
@@ -85,7 +89,7 @@ impl Vm {
         Ok(())
     }
     /// # 创建数组
-    pub fn build_array(&mut self, arr_len: usize){
+    pub fn build_array(&mut self, arr_len: usize) {
         let mut arr = vec![];
         for i in self.sp - arr_len..self.sp {
             let el = &self.stack[i];
@@ -144,14 +148,38 @@ impl Vm {
                         op.clone(),
                         left.clone(),
                         right.clone(),
-                    ))
+                    ));
                 }
             }
-            _ => return Err(RuntimeError::UnSupportedBinOperation(
-                op.clone(),
-                left.clone(),
-                right.clone(),
-            )),
+            (Object::Integer(left_val), Object::String(right_val)) => {
+                if let Opcode::Add = op {
+                    Rc::new(Object::String(left_val.to_string() + right_val))
+                } else {
+                    return Err(RuntimeError::UnSupportedBinOperation(
+                        op.clone(),
+                        left.clone(),
+                        right.clone(),
+                    ));
+                }
+            }
+            (Object::String(left_val), Object::Integer(right_val)) => {
+                if let Opcode::Add = op {
+                    Rc::new(Object::String(left_val.clone() + &right_val.to_string()))
+                } else {
+                    return Err(RuntimeError::UnSupportedBinOperation(
+                        op.clone(),
+                        left.clone(),
+                        right.clone(),
+                    ));
+                }
+            }
+            _ => {
+                return Err(RuntimeError::UnSupportedBinOperation(
+                    op.clone(),
+                    left.clone(),
+                    right.clone(),
+                ))
+            }
         };
         self.push_stack(result);
         Ok(())
@@ -180,7 +208,9 @@ impl Vm {
         if let (Object::Integer(left), Object::Integer(right)) = (left.as_ref(), right.as_ref()) {
             let bool = match op {
                 Opcode::GreaterThan => left > right,
+                Opcode::GreaterEq => left >= right,
                 Opcode::LessThan => left < right,
+                Opcode::LessEq => left <= right,
                 Opcode::Equal => left == right,
                 Opcode::NotEqual => left != right,
                 _ => return Err(RuntimeError::UnSupportedBinOperator(op.clone())),
@@ -209,7 +239,7 @@ impl Vm {
     #[inline]
     pub fn call_function(&mut self, arg_nums: usize) -> VmResult<()> {
         self.sp -= arg_nums;
-        let callee = self.pop_stack(); //往回跳过参数个数位置, 当前位置是函数
+        let callee = &self.stack[self.sp - 1]; //往回跳过参数个数位置, 当前位置是函数
         match callee.as_ref() {
             Object::Closure(closure) => {
                 if arg_nums != closure.compiled_function.num_parameters {
@@ -233,6 +263,7 @@ impl Vm {
                     v.push(Object::clone(rc));
                 }
                 let r = builtin_fun(v)?;
+                self.sp -= 1;
                 self.push_stack(Rc::new(r));
             }
             _ => {
@@ -241,6 +272,7 @@ impl Vm {
                 ))
             }
         }
+        // self.pop_stack();
         Ok(())
     }
     /// # 读取一个无符号整数，并返回字节长度
@@ -272,8 +304,12 @@ impl Vm {
     /// # 弹出栈顶元素
     // #[inline]
     pub fn pop_stack(&mut self) -> Rc<Object> {
-        self.sp -= 1;
-        self.stack[self.sp].clone()
+        if self.sp > 0 {
+            self.sp -= 1;
+            self.stack[self.sp].clone()
+        } else {
+            self.null_cache.clone()
+        }
     }
 
     /// # 栈顶元素存入全局变量
@@ -300,7 +336,7 @@ impl Vm {
         self.stack.get(frame.base_pointer + local_index).cloned()
     }
     /// # 取出局部变量并压入栈顶
-    pub fn get_local_and_push(&mut self, local_index: usize){
+    pub fn get_local_and_push(&mut self, local_index: usize) {
         let object = self.get_local(local_index).unwrap();
         self.push_stack(object)
     }

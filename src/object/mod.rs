@@ -249,7 +249,7 @@ impl Display for Object {
             Object::Integer(int) => write!(f, "{}", int),
             Object::_Float(float) => write!(f, "{}", float),
             Object::Boolean(bool) => write!(f, "{}", bool),
-            Object::String(string) => write!(f, "\"{}\"", string),
+            Object::String(string) => write!(f, "{}", string),
             Object::Array(elements) => {
                 let objs = elements
                     .borrow()

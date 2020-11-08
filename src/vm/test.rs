@@ -27,17 +27,17 @@ mod tests {
     #[test]
     fn for_statement() {
         let inputs = vec![
-        //     (
-        //         r"
-        //     let b = 1;
-        //     for(let i = 0; i < 100; i = i + 1) {
-        //         let start = time();
-        //         b = b + 1;
-        //     }
-        //     b
-        // ",
-        //         Object::Integer(101),
-        //     ),
+            (
+                r"
+            let b = 1;
+            for(let i = 0; i < 100; i = i + 1) {
+                let start = time();
+                b = b + 1;
+            }
+            b
+        ",
+                Object::Integer(101),
+            ),
             (
                 r"
             fn fibonacci(x) {
@@ -50,13 +50,13 @@ mod tests {
             let all = 0;
             for(let i = 0; i < 10; i = i+1) {
                 let start = time();
-                fibonacci(25);
+                fibonacci(i);
                 let end = time()
                 all = all + (end - start);
             }
 
             ",
-                Object::Integer(1),
+                Object::Null,
             ),
         ];
         run_vm_test(inputs);
@@ -180,7 +180,6 @@ mod tests {
     #[test]
     fn builtin_function() {
         let tests = vec![
-            ("1 + time()", Object::Integer(3)),
             ("len([1,2,3])", Object::Integer(3)),
             (r#"len("hello")"#, Object::Integer(5)),
         ];

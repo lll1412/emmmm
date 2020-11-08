@@ -130,7 +130,7 @@ pub fn push(args: Vec<Object>) -> EvalResult {
 pub fn print(args: Vec<Object>) -> EvalResult {
     args.iter()
         .map(|arg| arg.to_string())
-        .for_each(|s| println!("{}", s));
+        .for_each(|s| println!("{:?}", s));
     Ok(Object::Null)
 }
 

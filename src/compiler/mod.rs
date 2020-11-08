@@ -229,6 +229,7 @@ impl Compiler {
                 //if不成立则跳转到此处
                 let after_blocks = self.cur_instruction_len();
                 self.change_operand(jump_if_pos, after_blocks);
+                self.emit(Opcode::Null, vec![]);
             }
             Statement::Function(name, args, blocks) => {
                 let symbol = self.symbol_table.borrow_mut().define(name);
