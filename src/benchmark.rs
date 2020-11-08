@@ -3,11 +3,11 @@ use std::rc::Rc;
 use std::time::Instant;
 
 use crate::compiler::Compiler;
-use crate::Engine;
 use crate::eval::{evaluator, Environment};
 use crate::object::Object;
 use crate::parser::Parser;
 use crate::vm::Vm;
+use crate::Engine;
 
 pub fn benchmark(engine: Engine) {
     println!("Welcome to the 👽 programming language in {}", engine);
@@ -19,16 +19,25 @@ pub fn benchmark(engine: Engine) {
     // optimized 4, n = 35, takes 3.35s
     // optimized 5, n = 35, takes 2.3s, n = 36, takes 4.4s
     // optimized 6, n = 35, takes 2.25s, n = 36, takes 4.4s
-    let n = 36;
+    let n = 40;
     let code = &format!(
-        r"let fibonacci = fn(x) {{
+        r"
+        let fibonacci = fn(x) {{
              if x < 2 {{
                  return x
              }} else {{
                  return fibonacci(x - 1) + fibonacci(x - 2)
              }}
          }};
-         fibonacci({})
+         fibonacci({});
+         // let all = 0;
+         // for(let i = 0; i<10; i=i+1) {{
+         //     let start = time();
+         //     fibonacci();
+         //     let end = time()
+         //     all = all + end - start;
+         // }}
+         // all
          ",
         n
     );
@@ -66,9 +75,8 @@ pub fn benchmark(engine: Engine) {
     };
     let duration = start.elapsed();
     println!(
-        "{} s {} ms, No.{}, result: {}",
-        duration.as_secs(),
-        duration.as_millis(),
+        "{:?}, No.{}, result: {}",
+        duration,
         n,
         result
     );

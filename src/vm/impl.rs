@@ -110,11 +110,11 @@ impl Vm {
         Ok(())
     }
     /// # 执行二元操作
-    #[inline]
-    pub fn execute_binary_operation(&mut self, op: &Opcode) -> VmResult {
+    // #[inline]
+    pub fn execute_binary_operation(&mut self, op: &Opcode) -> VmResult<()> {
         let right = &*self.pop_stack();
         let left = &*self.pop_stack();
-        match (left, right) {
+        let result = match (left, right) {
             (Object::Integer(left_val), Object::Integer(right_val)) => {
                 let r = match op {
                     Opcode::Add => left_val + right_val,
@@ -132,27 +132,29 @@ impl Vm {
                     _ => return Err(RuntimeError::UnSupportedBinOperator(op.clone())),
                 };
                 match self.int_cache.get(r as usize) {
-                    None => Ok(Rc::new(Object::Integer(r))),
-                    Some(v) => Ok(v.clone()),
+                    None => Rc::new(Object::Integer(r)),
+                    Some(v) => v.clone(),
                 }
             }
             (Object::String(left_val), Object::String(right_val)) => {
                 if let Opcode::Add = op {
-                    Ok(Rc::new(Object::String(left_val.clone() + right_val)))
+                    Rc::new(Object::String(left_val.clone() + right_val))
                 } else {
-                    Err(RuntimeError::UnSupportedBinOperation(
+                    return Err(RuntimeError::UnSupportedBinOperation(
                         op.clone(),
                         left.clone(),
                         right.clone(),
                     ))
                 }
             }
-            _ => Err(RuntimeError::UnSupportedBinOperation(
+            _ => return Err(RuntimeError::UnSupportedBinOperation(
                 op.clone(),
                 left.clone(),
                 right.clone(),
             )),
-        }
+        };
+        self.push_stack(result);
+        Ok(())
     }
     /// # 执行索引操作
     pub fn execute_index_operation(&self, obj: &Object, index: &Object) -> VmResult {
@@ -207,7 +209,7 @@ impl Vm {
     #[inline]
     pub fn call_function(&mut self, arg_nums: usize) -> VmResult<()> {
         self.sp -= arg_nums;
-        let callee = &self.stack[self.sp - 1]; //往回跳过参数个数位置, 当前位置是函数
+        let callee = self.pop_stack(); //往回跳过参数个数位置, 当前位置是函数
         match callee.as_ref() {
             Object::Closure(closure) => {
                 if arg_nums != closure.compiled_function.num_parameters {
@@ -313,15 +315,8 @@ impl Vm {
     }
     /// # 最后弹出栈顶的元素
     pub fn last_popped_stack_element(&self) -> VmResult {
-        // if self.sp >= self.stack.len() {
-        //     Err(RuntimeError::ArrayOutOfBound {
-        //         len: self.stack.len(),
-        //         index: self.sp,
-        //     })
-        // } else {
         let object = &self.stack[self.sp];
         Ok(object.clone())
-        // }
     }
     pub fn get_const_object(&self, index: usize) -> Rc<Object> {
         self.constants[index].clone()

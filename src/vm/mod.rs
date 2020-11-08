@@ -81,7 +81,7 @@ impl Vm {
         }
     }
     pub fn run(&mut self) -> VmResult {
-        // let mut _time_recorder = crate::TimeRecorder::_new();
+        let mut _time_recorder = crate::TimeRecorder::_new();
         // ip means instruction_pointer
         while self.current_frame().ip < self.current_frame().instructions().len() {
             let frame = self.frames.last_mut().unwrap();
@@ -144,8 +144,7 @@ impl Vm {
                 }
 
                 Opcode::Add | Opcode::Sub | Opcode::Mul | Opcode::Div => {
-                    let result = self.execute_binary_operation(&op_code)?;
-                    self.push_stack(result);
+                    self.execute_binary_operation(&op_code)?;
                 }
 
                 Opcode::Pop => {
@@ -235,7 +234,9 @@ impl Vm {
                     self.current_frame_ip_inc(2);
                 }
                 Opcode::GetGlobal0 => {
-                    self.get_global_and_push(0);
+                    // self.get_global_and_push(0);
+                    let obj = self.globals.borrow()[0].clone();
+                    self.push_stack(obj);
                 }
                 Opcode::GetGlobal1 => {
                     self.get_global_and_push(1);
@@ -266,7 +267,9 @@ impl Vm {
                     self.get_local_and_push(local_index);
                 }
                 Opcode::GetLocal0 => {
-                    self.get_local_and_push(0);
+                    let frame = self.frames.last().unwrap();
+                    let object = self.stack[frame.base_pointer].clone();
+                    self.push_stack(object)
                 }
                 Opcode::GetLocal1 => {
                     self.get_local_and_push(1);

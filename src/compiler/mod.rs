@@ -175,6 +175,9 @@ impl Compiler {
         match statement {
             Statement::Let(name, expr) => {
                 //先定义函数名，不然递归会找不着当前函数
+                if self.symbol_table.borrow_mut().resolve(name).is_some() {
+                    return Err(CompileError::CustomErrMsg(format!("variable {} has been declared!", name)))
+                }
                 let symbol = self.symbol_table.borrow_mut().define(name);
                 self.compile_expression(expr)?;
                 self.store_symbol(symbol);
@@ -211,7 +214,12 @@ impl Compiler {
                 if let Some(cond) = cond {
                     self.compile_expression(cond)?;
                     jump_if_pos = self.get_jump_if_pos()?;
+                    //
+                    self.enter_scope();
                     self.compile_block_statement(blocks)?;
+                    let mut insts = self.leave_scope();
+                    self.add_instruction(&mut insts);
+
                     if let Some(after) = after {
                         self.compile_expression(after)?;
                     }

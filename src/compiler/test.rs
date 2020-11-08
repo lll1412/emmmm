@@ -32,7 +32,7 @@ mod tests {
         let inputs = vec![(
             r"
             for(let i = 0; i < 10; i = i + 1) {
-
+                print(i)
             }
             ",
             vec![Object::Integer(0), Object::Integer(10), Object::Integer(1)],
@@ -43,15 +43,19 @@ mod tests {
                 //cond
                 _make_noop(Opcode::GetGlobal0),// 2
                 _make_const(1),// 3
-                _make(Opcode::JumpIfNotLess, 11+3),// 4
+                _make(Opcode::JumpIfNotLess, 17+3),// 4
                 //loop blocks
+                _make(Opcode::GetBuiltin, 5),//7
+                _make_noop(Opcode::GetGlobal0),//9
+                _make(Opcode::Call, 1),//10
+                _make_noop(Opcode::Pop),//12
                 //after
-                _make_noop(Opcode::GetGlobal0),// 7
-                _make_const(2),//8
-                _make_noop(Opcode::Add),//9
-                _make_noop(Opcode::SetGlobal0),//10
+                _make_noop(Opcode::GetGlobal0),// 13
+                _make_const(2),//14
+                _make_noop(Opcode::Add),//15
+                _make_noop(Opcode::SetGlobal0),//16
                 //always jump to start
-                _make(Opcode::JumpAlways, 2),//11
+                _make(Opcode::JumpAlways, 2),//17
             ],
         )];
         run_compile_test(inputs);
@@ -298,8 +302,9 @@ mod tests {
             r"
             len([]);
             push([], 1);
+            1 + time()
             ",
-            vec![Object::Integer(1)],
+            vec![Object::Integer(1), Object::Integer(1)],
             vec![
                 _make(Opcode::GetBuiltin, 0),
                 _make(Opcode::Array, 0),
@@ -309,6 +314,11 @@ mod tests {
                 _make(Opcode::Array, 0),
                 _make_const(0),
                 _make(Opcode::Call, 2),
+                _make_noop(Opcode::Pop),
+                _make_noop(Opcode::Constant1),
+                _make(Opcode::GetBuiltin, 6),
+                _make(Opcode::Call, 0),
+                _make_noop(Opcode::Add),
                 _make_noop(Opcode::Pop),
             ],
         )];

@@ -6,8 +6,19 @@ mod tests {
     use crate::parser::base::ast::{BlockStatement, Expression};
     use crate::parser::{base::ast::*, lexer::*, Parser};
     #[test]
-    fn function_call(){
-
+    fn function_call() {
+        let inputs = &[(
+            "1 + time()",
+            Expression::Binary(
+                BinaryOperator::Plus,
+                Box::new(Expression::IntLiteral(1)),
+                Box::new(Expression::Call(
+                    Box::new(Expression::Identifier("time".to_string())),
+                    vec![],
+                )),
+            ),
+        )];
+        test_parse_str(inputs);
     }
     #[test]
     fn name_function() {
@@ -196,7 +207,6 @@ mod tests {
         ];
         test_parse(&tests);
     }
-
 
     #[test]
     fn test_function_literal_parsing() {
