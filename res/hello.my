@@ -1,0 +1,18 @@
+let say = fn(msg)
+{
+    print(msg);
+}
+let fb = fn(x) {
+    if x < 2 {
+        return x;
+    } else {
+        return fb(x - 1) + fb(x - 2)
+    }
+}
+
+let start = time()
+// for (let i = 0; i < 35; i = i + 1) {
+fb(36)
+// }
+// let end =
+print("cost: " + (time() - start) + " ms")
