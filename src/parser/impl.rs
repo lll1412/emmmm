@@ -5,6 +5,7 @@ use crate::parser::{
     lexer::Lexer,
 };
 use crate::parser::base::ast::BlockStatement;
+use crate::parser::ParserError::ExpectedUnaryOp;
 
 impl Parser {
     // 从Lexer构建Parser
@@ -169,8 +170,8 @@ impl Parser {
     /// 解析表达式
     fn parse_expression(&mut self, precedence: Precedence) -> ParseResult {
         let unary = self
-            .unary_parse_fn()
-            .ok_or_else(|| ParserError::ExpectedUnaryOp(self.token.clone()))?;
+            .unary_parse_fn()?;
+        // .ok_or_else(|| ParserError::ExpectedUnaryOp(self.token.clone()))?;
         let mut left_expr = unary(self)?;
         while self.peek_token != Token::Semicolon
             && precedence < self.binary_token(&self.peek_token).0
@@ -295,28 +296,29 @@ impl Parser {
         Ok(Expression::Unary(operator, Box::new(expr)))
     }
     /// 一元表达式函数
-    fn unary_parse_fn(&self) -> Option<UnaryParseFn> {
-        match self.token {
-            Token::Ident(_) => Some(Parser::parse_identifier),
+    fn unary_parse_fn(&self) -> ParseResult<UnaryParseFn> {
+        let upf = match self.token {
+            Token::Ident(_) => Parser::parse_identifier,
 
-            Token::Int(_) => Some(Parser::parse_integer_literal),
-            Token::Float(_) => Some(Parser::parse_float_literal),
-            Token::True => Some(Parser::parse_boolean),
-            Token::False => Some(Parser::parse_boolean),
-            Token::String(_) => Some(Parser::parse_string_literal),
+            Token::Int(_) => Parser::parse_integer_literal,
+            Token::Float(_) => Parser::parse_float_literal,
+            Token::True => Parser::parse_boolean,
+            Token::False => Parser::parse_boolean,
+            Token::String(_) => Parser::parse_string_literal,
 
-            Token::Bang => Some(Parser::parse_unary_expression),
-            Token::Minus => Some(Parser::parse_unary_expression),
+            Token::Bang => Parser::parse_unary_expression,
+            Token::Minus => Parser::parse_unary_expression,
 
-            Token::Lparen => Some(Parser::parse_grouped_expression),
-            Token::Lbracket => Some(Parser::parse_array_literal),
-            Token::Lbrace => Some(Parser::parse_hash_literal),
+            Token::Lparen => Parser::parse_grouped_expression,
+            Token::Lbracket => Parser::parse_array_literal,
+            Token::Lbrace => Parser::parse_hash_literal,
 
-            Token::If => Some(Parser::parse_if_expression),
-            Token::Function => Some(Parser::parse_function_expression),
+            Token::If => Parser::parse_if_expression,
+            Token::Function => Parser::parse_function_expression,
 
-            _ => None,
-        }
+            _ => return Err(ExpectedUnaryOp(self.token.clone())),
+        };
+        Ok(upf)
     }
     /// 一元表达式操作符
     fn unary_token(&self, token: &Token) -> ParseResult<UnaryOperator> {

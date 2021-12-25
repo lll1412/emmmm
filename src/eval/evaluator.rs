@@ -24,7 +24,7 @@ fn eval_statement(statement: &Statement, env: Env) -> EvalResult {
     match statement {
         Statement::Let(name, expr) => {
             let val = eval_expression(expr, Rc::clone(&env))?;
-            env.borrow_mut().set(&name, val)?;
+            env.borrow_mut().set(name, val)?;
             Ok(Object::Null)
         }
         Statement::Return(option) => {
@@ -250,7 +250,7 @@ fn eval_call_expression(
     fun: &Expression,
     params: &[Expression],
 ) -> Result<Object, RuntimeError> {
-    let fun = eval_expression(&fun, Rc::clone(&env))?;
+    let fun = eval_expression(fun, Rc::clone(&env))?;
     let args = eval_expressions(params, Rc::clone(&env))?;
     apply_function(fun, args)
 }
@@ -264,9 +264,9 @@ fn eval_binary_expression(
     match left {
         //变量赋值
         Expression::Identifier(id) if operator == &BinaryOperator::Assign => {
-            if env.borrow().contains(&id) {
+            if env.borrow().contains(id) {
                 let new_val = eval_expression(right, Rc::clone(&env))?;
-                env.borrow_mut().set(&id, new_val.clone())?;
+                env.borrow_mut().set(id, new_val.clone())?;
                 Ok(new_val)
             } else {
                 Err(RuntimeError::IdentifierNotFound(id.clone()))
@@ -276,7 +276,7 @@ fn eval_binary_expression(
         Expression::Index(arr, key) if operator == &BinaryOperator::Assign => {
             //只能通过数组名索引来修改
             if let Expression::Identifier(obj_name) = arr.deref() {
-                let option = env.borrow().get(&obj_name);
+                let option = env.borrow().get(obj_name);
                 if let Some(obj) = option {
                     //是否存在
                     let ref_obj = obj.borrow();

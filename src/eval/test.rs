@@ -133,6 +133,12 @@ mod tests {
                 "let add = fn(x, y) {x+y}; add(2, add(5, 5));",
                 Object::Integer(12),
             ),
+            (r"
+            let add = fn(a, b) { a + b }
+            let applyFunc = fn(a, b, func) { func(a, b) }
+            applyFunc(2, 2, add)
+            ",
+                Object::Integer(4)),
         ];
         check_input(&inputs);
     }
@@ -344,7 +350,7 @@ mod tests {
     }
 
     fn read_from_file(filename: &str) -> String {
-        let path = format!(r"C:\Users\l\CLionProjects\Example\res\{}", filename);
+        let path = format!(r"M:\Code\CLionProjects\emmmm\res\{}", filename);
         std::fs::read_to_string(path).unwrap()
     }
 }

@@ -103,7 +103,7 @@ pub enum BinaryOperator {
 impl Display for Program {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         for statement in &self.statements {
-            write!(f, "{}", statement)?;
+            write!(f, "{};", statement)?;
         }
         Ok(())
     }
