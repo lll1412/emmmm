@@ -6,7 +6,7 @@ use crate::compiler::symbol_table::{Symbol, SymbolScope, SymbolTable};
 use crate::create_rc_ref_cell;
 use crate::object::builtins::BUILTINS;
 use crate::object::{CompiledFunction, Object};
-use crate::parser::base::ast::{
+use crate::parser::ast::{
     BinaryOperator, BlockStatement, Expression, Program, Statement, UnaryOperator,
 };
 use std::prelude::v1::Option::Some;
@@ -370,7 +370,7 @@ impl Compiler {
     fn compile_function_expression(
         &mut self,
         fun_name: Option<String>,
-        args: &Vec<String>,
+        args: &[String],
         blocks: &BlockStatement,
     ) -> CompileResult {
         self.enter_scope();

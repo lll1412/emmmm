@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::parser::base::token::Token;
+    use crate::parser::lexer::token::Token;
     use crate::parser::lexer::Lexer;
     use Token::Plus;
     #[test]

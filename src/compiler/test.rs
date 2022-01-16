@@ -10,7 +10,8 @@ mod tests {
     use crate::compiler::{Compiler, Instructions};
     use crate::create_rc_ref_cell;
     use crate::object::{CompiledFunction, Object};
-    use crate::parser::base::ast::Program;
+    use crate::Opcode::*;
+    use crate::parser::ast::Program;
 
     macro_rules! hash {
         {} => {
@@ -410,6 +411,36 @@ mod tests {
     #[test]
     fn test_function_call_with_args() {
         let tests = vec![
+            (
+                "let f = fn(a, b) {let c = 1; a + b + c};f(2,3) ",
+                vec![
+                    Object::Integer(1),
+                    make_fun_object_with_name("f",
+                        vec![
+                            _make_const( 0),
+                            _make_noop(SetLocal2),
+                            _make_noop(GetLocal0),
+                            _make_noop(GetLocal1),
+                            _make_noop(Add),
+                            _make_noop(GetLocal2),
+                            _make_noop(Add),
+                            _make_noop(ReturnValue),
+                        ].concat(),
+                        3,2
+                    ),
+                    Object::Integer(2),
+                    Object::Integer(3),
+                ],
+                vec![
+                    _make_closure(1, 0),
+                    _make_noop(SetGlobal0),
+                    _make_noop(GetGlobal0),
+                    _make_const(2),
+                    _make_const(3),
+                    _make(Call, 2),
+                    _make_noop(Pop),
+                ],
+            ),
             (
                 r"
             let global_num = 10;

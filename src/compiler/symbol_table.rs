@@ -21,7 +21,7 @@ pub struct Symbol {
     pub index: usize,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct SymbolTable {
     pub outer: Option<Rc<RefCell<SymbolTable>>>,
     pub store: HashMap<String, Rc<Symbol>>,
@@ -79,7 +79,7 @@ impl SymbolTable {
         self.store.insert(name, symbol);
     }
     pub fn define_self(&mut self, fun_name: Option<String>){
-        let name = fun_name.unwrap_or("this".to_string());
+        let name = fun_name.unwrap_or_else(|| "this".to_string());
         let self_symbol = Rc::new(Symbol {
             name: name.clone(),
             scope: SymbolScope::Function,

@@ -6,7 +6,7 @@ use crate::eval::Environment;
 use crate::object::builtins::lookup;
 use crate::object::Object::Boolean;
 use crate::object::{HashKey, Object, RuntimeError};
-use crate::parser::base::ast::{
+use crate::parser::ast::{
     BinaryOperator, BlockStatement, Expression, Program, Statement, UnaryOperator,
 };
 use std::ops::Deref;

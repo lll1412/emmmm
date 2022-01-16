@@ -5,7 +5,6 @@
 
 ## How to use
 ### compile mode(default)
-### current mode is 10% slower than Python
 `cargo run --release`
 ### repl mode
 `cargo run --release --eval`

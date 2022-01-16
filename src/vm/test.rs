@@ -5,7 +5,7 @@ mod tests {
 
     use crate::compiler::Compiler;
     use crate::object::{HashKey, Object, RuntimeError};
-    use crate::parser::base::ast::Program;
+    use crate::parser::ast::Program;
     use crate::vm::Vm;
     use std::time::Instant;
 

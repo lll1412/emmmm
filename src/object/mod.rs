@@ -6,7 +6,7 @@ use std::rc::Rc;
 use crate::compiler::code::{print_instructions, Instructions, Opcode};
 use crate::eval::evaluator::EvalResult;
 use crate::eval::Environment;
-use crate::parser::base::ast::{BinaryOperator, BlockStatement, Expression, UnaryOperator};
+use crate::parser::ast::{BinaryOperator, BlockStatement, Expression, UnaryOperator};
 
 pub mod builtins;
 

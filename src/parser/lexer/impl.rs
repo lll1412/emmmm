@@ -1,7 +1,7 @@
 use std::iter::Peekable;
 use std::str::Chars;
 
-use crate::parser::base::token::*;
+use crate::parser::lexer::token::*;
 use crate::parser::lexer::{is_digit, is_letter, Lexer};
 
 impl Lexer {

@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::parser::base::ast::{
+    use crate::parser::ast::{
         BinaryOperator, BlockStatement, Expression, Statement, UnaryOperator,
     };
     use crate::parser::Parser;

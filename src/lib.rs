@@ -8,7 +8,7 @@ use std::time::Instant;
 use crate::compiler::{Compiler, Constants, RcSymbolTable};
 use crate::eval::evaluator;
 use crate::eval::evaluator::Env;
-use crate::parser::base::ast::Program;
+use parser::ast::Program;
 use crate::vm::{Globals, Vm};
 
 pub mod benchmark;
@@ -103,8 +103,8 @@ pub struct TimeRecorder {
 }
 #[derive(Default, Debug)]
 struct Pair<T = u128, C = u64> {
-    time: T,
-    count: C,
+    _time: T,
+    _count: C,
 }
 impl TimeRecorder {
     fn _new() -> Self {
@@ -118,8 +118,8 @@ impl TimeRecorder {
         let time = self._start.elapsed().as_nanos();
         if self._record_map.contains_key(&key) {
             let mut pair = self._record_map[&key].borrow_mut();
-            pair.count += 1;
-            pair.time += time;
+            pair._count += 1;
+            pair._time += time;
         } else {
             self._record_map.insert(key, RefCell::new(Pair::default()));
         }
@@ -130,12 +130,12 @@ impl TimeRecorder {
         let mut time_all = 0;
         for (k, v) in self._record_map.iter() {
             let v = v.borrow();
-            time_all += v.time;
+            time_all += v._time;
             map.insert(
-                std::time::Duration::from_nanos(v.time as u64),
+                std::time::Duration::from_nanos(v._time as u64),
                 Pair {
-                    time: Opcode::from_byte(*k).unwrap(),
-                    count: v,
+                    _time: Opcode::from_byte(*k).unwrap(),
+                    _count: v,
                 },
             );
             // println!(

@@ -3,6 +3,7 @@ use std::str::Chars;
 
 mod r#impl;
 mod test;
+pub mod token;
 
 #[derive(Debug, Clone)]
 pub struct Lexer {

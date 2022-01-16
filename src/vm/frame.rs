@@ -28,7 +28,7 @@ impl Frame {
     }
     pub fn get_free(&self, free_index: usize) -> Rc<Object> {
         if let Object::Closure(closure) = &*self.closure {
-            return closure.free_variables[free_index].clone();
+            closure.free_variables[free_index].clone()
         } else {
             panic!()
         }

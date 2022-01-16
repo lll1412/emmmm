@@ -19,7 +19,8 @@ pub fn benchmark(engine: Engine) {
     // optimized 4, n = 35, takes 3.35s
     // optimized 5, n = 35, takes 2.3s, n = 36, takes 4.4s
     // optimized 6, n = 35, takes 2.25s, n = 36, takes 4.4s
-    let n = 40;
+    // optimized 7, n = 35, takes 2.43s, n = 36, takes 4.0s// rust 2021 更新
+    let n = 36;
     let code = &format!(
         r"
         let fibonacci = fn(x) {{

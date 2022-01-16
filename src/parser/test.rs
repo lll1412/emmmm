@@ -3,8 +3,10 @@ mod tests {
     use BinaryOperator::*;
     use Expression::*;
 
-    use crate::parser::base::ast::{BlockStatement, Expression};
-    use crate::parser::{base::ast::*, lexer::*, Parser};
+    use crate::parser::ast::{BlockStatement, Expression};
+    use crate::parser::{lexer::*, Parser};
+    use crate::parser::ast::*;
+
     #[test]
     fn function_call() {
         let inputs = &[(
