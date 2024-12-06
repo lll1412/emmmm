@@ -130,7 +130,7 @@ fn eval_expression(expr: &Expression, env: Env) -> EvalResult {
             }
         }
 
-        Expression::Identifier(id) => eval_identifier_expression(Rc::clone(&env), &id),
+        Expression::Identifier(id) => eval_identifier_expression(Rc::clone(&env), id),
         Expression::FunctionLiteral(params, block) => Ok(Object::Function(
             // todo 待定是否新增object类型区分函数语句和表达式
             None,
@@ -232,12 +232,12 @@ fn apply_function(fun: Object, param_values: Vec<Object>) -> EvalResult {
 /// ## 标识符表达式求值
 fn eval_identifier_expression(env: Env, id: &str) -> EvalResult {
     //优先先去上下文中查找
-    let option = env.as_ref().borrow().get(&id);
+    let option = env.as_ref().borrow().get(id);
     if let Some(obj) = option.as_deref() {
         return Ok(obj.borrow().clone());
     }
     //内置函数中查找
-    if let Some(builtin) = lookup(&id) {
+    if let Some(builtin) = lookup(id) {
         return Ok(builtin);
     }
     //否则报错

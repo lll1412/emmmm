@@ -105,7 +105,7 @@ pub fn rest(args: Vec<Object>) -> EvalResult {
 pub fn push(args: Vec<Object>) -> EvalResult {
     let push = match &args[0] {
         Object::Array(items) => {
-            for x in args[1..].to_vec() {
+            for x in args[1..].iter().cloned() {
                 items.borrow_mut().push(x)
             }
             Object::Array(items.clone())

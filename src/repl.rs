@@ -26,7 +26,7 @@ pub fn start(engine: Engine) {
         None => false,
         Some(file_path) => {
             input =
-                std::fs::read_to_string(&file_path).expect(&*format!("文件 {} 不存在", &file_path));
+                std::fs::read_to_string(&file_path).unwrap_or_else(|_| panic!("文件 {} 不存在", &file_path));
             true
         }
     };

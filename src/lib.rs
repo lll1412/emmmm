@@ -1,3 +1,5 @@
+#![allow(unused,dead_code)]
+
 use compiler::code::Opcode;
 use std::cell::RefCell;
 use std::env;
@@ -65,12 +67,7 @@ pub fn exe_with_eval(program: &Program, env: &Env) {
 }
 
 pub fn parse_file() -> Option<String> {
-    for arg in env::args() {
-        if arg.ends_with(".my") {
-            return Some(arg);
-        }
-    }
-    None
+    env::args().find(|arg| arg.ends_with(".my"))
 }
 pub fn exe_with_vm(
     program: &Program,
@@ -116,12 +113,12 @@ impl TimeRecorder {
     fn _tick(&mut self, key: Opcode) {
         let key = key as u8;
         let time = self._start.elapsed().as_nanos();
-        if self._record_map.contains_key(&key) {
+        if let std::collections::hash_map::Entry::Vacant(e) = self._record_map.entry(key) {
+            e.insert(RefCell::new(Pair::default()));
+        } else {
             let mut pair = self._record_map[&key].borrow_mut();
             pair._count += 1;
             pair._time += time;
-        } else {
-            self._record_map.insert(key, RefCell::new(Pair::default()));
         }
         self._start = std::time::Instant::now();
     }

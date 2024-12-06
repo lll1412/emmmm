@@ -15,7 +15,7 @@ pub mod code;
 pub mod symbol_table;
 mod test;
 
-type CompileResult<T = ()> = std::result::Result<T, CompileError>;
+type CompileResult<T = ()> = Result<T, CompileError>;
 pub type Constants = Vec<Rc<Object>>;
 pub type RcSymbolTable = Rc<RefCell<SymbolTable>>;
 const CONSTANT_CAPACITY: usize = 0xFFFF;
@@ -176,7 +176,10 @@ impl Compiler {
             Statement::Let(name, expr) => {
                 //先定义函数名，不然递归会找不着当前函数
                 if self.symbol_table.borrow_mut().resolve(name).is_some() {
-                    return Err(CompileError::CustomErrMsg(format!("variable {} has been declared!", name)))
+                    return Err(CompileError::CustomErrMsg(format!(
+                        "variable {} has been declared!",
+                        name
+                    )));
                 }
                 let symbol = self.symbol_table.borrow_mut().define(name);
                 self.compile_expression(expr)?;
@@ -473,15 +476,14 @@ impl Compiler {
         Ok(())
     }
     fn get_jump_if_pos(&mut self) -> CompileResult<usize> {
-        let jump_if_pos;
-        if self.last_instruction_is(Opcode::LessThan) {
+        let jump_if_pos = if self.last_instruction_is(Opcode::LessThan) {
             //如果是小于比较运算
             self.remove_last_instruction()?; //移除小于指令
-            jump_if_pos = self.emit(Opcode::JumpIfNotLess, vec![9999]); //替换指令
+            self.emit(Opcode::JumpIfNotLess, vec![9999]) //替换指令
         } else {
             //不变
-            jump_if_pos = self.emit(Opcode::JumpIfNotTruthy, vec![9999]);
-        }
+            self.emit(Opcode::JumpIfNotTruthy, vec![9999])
+        };
         Ok(jump_if_pos)
     }
     /// 常量池添加常量，返回常量索引
@@ -555,7 +557,7 @@ impl Compiler {
     /// 改变操作数
     fn change_operand(&mut self, op_pos: usize, operand: usize) {
         let b = self.cur_instruction()[op_pos];
-        let op = Opcode::from_byte(b).expect(&format!("没有此操作码:{:4x}", b));
+        let op = Opcode::from_byte(b).unwrap_or_else(|| panic!("没有此操作码:{:4x}", b));
         let new_instruction = code::make(op, vec![operand]);
         self.replace_instruction(op_pos, new_instruction);
     }

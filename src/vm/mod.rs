@@ -15,7 +15,7 @@ use crate::object::HashKey;
 mod frame;
 mod test;
 
-pub type VmResult<T = Rc<Object>> = std::result::Result<T, RuntimeError>;
+pub type VmResult<T = Rc<Object>> = Result<T, RuntimeError>;
 pub type Globals = Rc<RefCell<Vec<Rc<Object>>>>;
 pub type Frames = Vec<Frame>;
 pub type Stack = Vec<Rc<Object>>;
@@ -416,7 +416,7 @@ impl Vm {
                     Object::Hash(pairs) => {
                         let val = self.pop_stack();
                         let index = self.pop_stack();
-                        let key = HashKey::from_object(&*index)?;
+                        let key = HashKey::from_object(&index)?;
                         pairs.borrow_mut().insert(key, Object::clone(&val));
                     }
                     //普通赋值
@@ -471,13 +471,13 @@ impl Vm {
                     Opcode::Div => {
                         if right_val == &0 {
                             return Err(RuntimeError::ByZero(
-                                Object::clone(&left),
-                                Object::clone(&right),
+                                Object::clone(left),
+                                Object::clone(right),
                             ));
                         }
                         left_val / right_val
                     }
-                    _ => return Err(RuntimeError::UnSupportedBinOperator(op.clone())),
+                    _ => return Err(RuntimeError::UnSupportedBinOperator(*op)),
                 };
                 match self.int_cache.get(r as usize) {
                     None => Rc::new(Object::Integer(r)),
@@ -489,7 +489,7 @@ impl Vm {
                     Rc::new(Object::String(left_val.clone() + right_val))
                 } else {
                     return Err(RuntimeError::UnSupportedBinOperation(
-                        op.clone(),
+                        *op,
                         left.clone(),
                         right.clone(),
                     ));
@@ -500,7 +500,7 @@ impl Vm {
                     Rc::new(Object::String(left_val.to_string() + right_val))
                 } else {
                     return Err(RuntimeError::UnSupportedBinOperation(
-                        op.clone(),
+                        *op,
                         left.clone(),
                         right.clone(),
                     ));
@@ -511,7 +511,7 @@ impl Vm {
                     Rc::new(Object::String(left_val.clone() + &right_val.to_string()))
                 } else {
                     return Err(RuntimeError::UnSupportedBinOperation(
-                        op.clone(),
+                        *op,
                         left.clone(),
                         right.clone(),
                     ));
@@ -519,7 +519,7 @@ impl Vm {
             }
             _ => {
                 return Err(RuntimeError::UnSupportedBinOperation(
-                    op.clone(),
+                    *op,
                     left.clone(),
                     right.clone(),
                 ));
@@ -557,7 +557,7 @@ impl Vm {
                 Opcode::LessEq => left <= right,
                 Opcode::Equal => left == right,
                 Opcode::NotEqual => left != right,
-                _ => return Err(RuntimeError::UnSupportedBinOperator(op.clone())),
+                _ => return Err(RuntimeError::UnSupportedBinOperator(*op)),
             };
             Ok(self.get_bool_from_cache(bool))
         } else {
@@ -565,7 +565,7 @@ impl Vm {
                 Opcode::Equal => Ok(self.get_bool_from_cache(left == right)),
                 Opcode::NotEqual => Ok(self.get_bool_from_cache(left != right)),
                 _ => Err(RuntimeError::UnSupportedBinOperation(
-                    op.clone(),
+                    *op,
                     Object::clone(&left),
                     Object::clone(&right),
                 )),
@@ -620,7 +620,6 @@ impl Vm {
         Ok(())
     }
     /// # 读取一个无符号整数，并返回字节长度
-
     pub fn read_usize(&self, op_code: Opcode, ip: usize) -> (usize, usize) {
         let (operands, n) = read_operands(
             &op_code.definition(),

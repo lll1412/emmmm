@@ -14,10 +14,7 @@ pub struct Lexer {
 }
 
 fn is_letter(ch: char) -> bool {
-    ch == '_' ||
-        // ch.is_alphabetic()
-        (ch >= 'a' && ch <= 'z') ||
-        (ch >= 'A' && ch <= 'Z')
+    ch == '_' || ch.is_alphabetic()
 }
 
 fn is_digit(ch: char) -> bool {

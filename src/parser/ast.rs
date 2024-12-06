@@ -203,8 +203,8 @@ impl Display for Expression {
             Expression::Index(left_expr, index_expr) => write!(
                 f,
                 "({left}[{index}])",
-                left = left_expr.to_string(),
-                index = index_expr.to_string()
+                left = left_expr,
+                index = index_expr
             ),
             Expression::HashLiteral(hash) => {
                 let r = hash

@@ -284,8 +284,8 @@ pub fn read_operands(def: &Definition, instructions: &[u8]) -> (Vec<usize>, usiz
 }
 pub fn _read_operand(width: usize, insts: &[u8]) -> usize {
     match width {
-        2 => read_usize(&insts, 2),
-        1 => read_usize(&insts, 1),
+        2 => read_usize(insts, 2),
+        1 => read_usize(insts, 1),
         _ => unimplemented!(),
     }
 }
