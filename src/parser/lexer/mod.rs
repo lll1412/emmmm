@@ -10,7 +10,7 @@ pub struct Lexer {
     input: String,
     position: usize,
     ch: char,
-    chars: Peekable<Chars<'static>>,
+    chars: Vec<char>,
 }
 
 fn is_letter(ch: char) -> bool {

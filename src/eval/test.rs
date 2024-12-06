@@ -350,7 +350,7 @@ mod tests {
     }
 
     fn read_from_file(filename: &str) -> String {
-        let path = format!(r"M:\Code\CLionProjects\emmmm\res\{}", filename);
+        let path = format!(r"/Users/l/Code/RustroverProjects/emmmm/res/{}", filename);
         std::fs::read_to_string(path).unwrap()
     }
 }

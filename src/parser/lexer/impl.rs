@@ -6,8 +6,7 @@ use crate::parser::lexer::{is_digit, is_letter, Lexer};
 
 impl Lexer {
     pub fn new(input: &str) -> Self {
-        let chars: Peekable<Chars<'static>> =
-            unsafe { std::mem::transmute(input.chars().peekable()) };
+        let chars = input.chars().collect::<Vec<_>>();
         let mut lexer = Self {
             input: String::from(input),
             position: 0,
@@ -164,11 +163,11 @@ impl Lexer {
         } else {
             self.ch.len_utf8()
         };
-        self.ch = self.chars.next().unwrap_or(EOF);
+        self.ch = self.chars.get(self.position).cloned().unwrap_or(EOF);
     }
     //查看字符
     fn peek_char(&mut self) -> &char {
-        self.chars.peek().unwrap_or(&EOF)
+        self.chars.get(self.position + 1).unwrap_or(&EOF)
     }
     //预检下个字符是否为期待字符，是则返回期待Token，并向后读取一个字符，否则返回默认Token
     fn peek_is_eat_or(&mut self, c: char, expect_token: Token, default_token: Token) -> Token {

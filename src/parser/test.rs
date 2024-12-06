@@ -3,21 +3,18 @@ mod tests {
     use BinaryOperator::*;
     use Expression::*;
 
+    use crate::parser::ast::*;
     use crate::parser::ast::{BlockStatement, Expression};
     use crate::parser::{lexer::*, Parser};
-    use crate::parser::ast::*;
 
     #[test]
     fn function_call() {
         let inputs = &[(
             "1 + time()",
-            Expression::Binary(
-                BinaryOperator::Plus,
-                Box::new(Expression::IntLiteral(1)),
-                Box::new(Expression::Call(
-                    Box::new(Expression::Identifier("time".to_string())),
-                    vec![],
-                )),
+            Binary(
+                Plus,
+                Box::new(IntLiteral(1)),
+                Box::new(Call(Box::new(Identifier("time".to_string())), vec![])),
             ),
         )];
         test_parse_str(inputs);
@@ -45,7 +42,7 @@ mod tests {
     fn for_statement() {
         let inputs = &[
             (
-                r#"for (let i = 1; i < 2; i = i + 1){}"#,
+                r#"for (let i = 1; i < 2; i = i + 1){};"#,
                 Statement::For(
                     Some(Box::new(Statement::Let(
                         "i".to_string(),
