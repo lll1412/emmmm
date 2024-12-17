@@ -483,10 +483,10 @@ impl Vm {
                     }
                     _ => return Err(RuntimeError::UnSupportedBinOperator(*op)),
                 };
-                match self.int_cache.get(r as usize) {
-                    None => Rc::new(Object::Integer(r)),
-                    Some(v) => v.clone(),
-                }
+                self.int_cache
+                    .get(r as usize)
+                    .cloned()
+                    .unwrap_or_else(|| Rc::new(Object::Integer(r)))
             }
             (Object::String(left_val), Object::String(right_val)) => {
                 if let Opcode::Add = op {
@@ -563,7 +563,15 @@ impl Vm {
                 Opcode::NotEqual => left != right,
                 _ => return Err(RuntimeError::UnSupportedBinOperator(*op)),
             };
-            Ok(self.get_bool_from_cache(bool))
+            // Ok(bool
+            //     .then(|| self.bool_cache_true.clone())
+            //     .unwrap_or_else(|| self.bool_cache_false.clone()))
+            if bool {
+                Ok(self.bool_cache_true.clone())
+            } else {
+                Ok(self.bool_cache_false.clone())
+            }
+            // Ok(self.get_bool_from_cache(bool))
         } else {
             match op {
                 Opcode::Equal => Ok(self.get_bool_from_cache(left == right)),
@@ -592,12 +600,12 @@ impl Vm {
             Object::Closure(Closure {
                 compiled_function, ..
             }) => {
-                if arg_nums != compiled_function.num_parameters {
-                    return Err(RuntimeError::WrongArgumentCount(
-                        compiled_function.num_parameters,
-                        arg_nums,
-                    ));
-                }
+                // if arg_nums != compiled_function.num_parameters {
+                //     return Err(RuntimeError::WrongArgumentCount(
+                //         compiled_function.num_parameters,
+                //         arg_nums,
+                //     ));
+                // }
                 // let num_locals = closure.compiled_function.num_locals;
                 let frame = Frame::new(callee.clone(), self.sp);
                 // Equivalent to
