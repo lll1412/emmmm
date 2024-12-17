@@ -5,7 +5,6 @@ use std::cell::RefCell;
 use std::env;
 use std::fmt;
 use std::rc::Rc;
-use std::time::Instant;
 
 use crate::compiler::{Compiler, Constants, RcSymbolTable};
 use crate::eval::evaluator;
@@ -80,7 +79,7 @@ pub fn exe_with_vm(
     match result {
         Ok(byte_code) => {
             let mut vm = Vm::with_global_store(byte_code, globals.clone());
-            let _start = Instant::now();
+            // let _start = std::time::Instant::now();
             let result = vm.run();
             match result {
                 Ok(object) => {

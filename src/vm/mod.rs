@@ -2,15 +2,15 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use crate::{
-    compiler::{ByteCode, code::Opcode, Constants},
-    object::{Closure, CompiledFunction, Object, RuntimeError},
-    vm::frame::Frame,
-};
-use crate::compiler::code::{Instructions, read_operands};
+use crate::compiler::code::{read_operands, Instructions};
 use crate::create_rc_ref_cell;
 use crate::object::builtins::BUILTINS;
 use crate::object::HashKey;
+use crate::{
+    compiler::{code::Opcode, ByteCode, Constants},
+    object::{Closure, CompiledFunction, Object, RuntimeError},
+    vm::frame::Frame,
+};
 
 mod frame;
 mod test;
@@ -163,7 +163,12 @@ impl Vm {
                     self.push_stack(self.bool_cache_false.clone());
                 }
 
-                Opcode::Equal | Opcode::NotEqual | Opcode::GreaterThan | Opcode::LessThan | Opcode::GreaterEq | Opcode::LessEq => {
+                Opcode::Equal
+                | Opcode::NotEqual
+                | Opcode::GreaterThan
+                | Opcode::LessThan
+                | Opcode::GreaterEq
+                | Opcode::LessEq => {
                     let bool_object = self.execute_comparison_operation(&op_code)?;
                     self.push_stack(bool_object);
                 }
@@ -350,7 +355,6 @@ impl Vm {
         self.last_popped_stack_element()
     }
 }
-
 
 impl Vm {
     pub fn jump_if(&mut self, truthy: bool, ins: &Instructions, ip: usize) {
@@ -585,7 +589,9 @@ impl Vm {
         self.sp -= arg_nums;
         let callee = &self.stack[self.sp - 1]; //往回跳过参数个数位置, 当前位置是函数
         match callee.as_ref() {
-            Object::Closure(Closure { compiled_function, .. }) => {
+            Object::Closure(Closure {
+                compiled_function, ..
+            }) => {
                 if arg_nums != compiled_function.num_parameters {
                     return Err(RuntimeError::WrongArgumentCount(
                         compiled_function.num_parameters,

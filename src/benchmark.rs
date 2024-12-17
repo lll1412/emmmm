@@ -63,23 +63,15 @@ pub fn benchmark(engine: Engine) {
             }
             let mut vm = Vm::new(byte_code);
             start = Instant::now();
-            let r = match vm.run() {
-                Ok(result) => result,
-                Err(err) => {
-                    println!("err: {}", err);
-                    Rc::new(Object::Null)
-                }
-            };
+            let r = vm.run().unwrap_or_else(|err| {
+                println!("err: {}", err);
+                Rc::new(Object::Null)
+            });
             Object::clone(&r)
             // let result = vm.run().expect("runtime error");
             // Object::clone(&result)
         }
     };
     let duration = start.elapsed();
-    println!(
-        "{:?}, No.{}, result: {}",
-        duration,
-        n,
-        result
-    );
+    println!("{:?}, No.{}, result: {}", duration, n, result);
 }
