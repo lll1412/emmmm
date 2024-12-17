@@ -17,7 +17,8 @@ pub fn start(engine: Engine) {
     //for eval
     let env = create_rc_ref_cell(Environment::new());
     //for compiler and vm
-    let globals = create_rc_ref_cell(vec![]);
+    // let globals = create_rc_ref_cell(vec![]);
+    let globals = vec![];
     let symbol_table = create_rc_ref_cell(SymbolTable::new());
     let constants = vec![];
 

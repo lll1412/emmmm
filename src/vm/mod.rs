@@ -2,8 +2,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use crate::compiler::code::{read_operands, Instructions};
-use crate::create_rc_ref_cell;
+use crate::compiler::code::{read_operands, Instructions, OPS};
 use crate::object::builtins::BUILTINS;
 use crate::object::HashKey;
 use crate::{
@@ -16,7 +15,8 @@ mod frame;
 mod test;
 
 pub type VmResult<T = Rc<Object>> = Result<T, RuntimeError>;
-pub type Globals = Rc<RefCell<Vec<Rc<Object>>>>;
+// pub type Globals = Rc<RefCell<Vec<Rc<Object>>>>;
+pub type Globals = Vec<Rc<Object>>;
 pub type Frames = Vec<Frame>;
 pub type Stack = Vec<Rc<Object>>;
 
@@ -50,8 +50,8 @@ pub struct Vm {
 
 impl Vm {
     pub fn new(byte_code: ByteCode) -> Self {
-        let globals = create_rc_ref_cell(Vec::with_capacity(GLOBALS_SIZE));
-        Vm::with_global_store(byte_code, globals)
+        // let globals = create_rc_ref_cell(Vec::with_capacity(GLOBALS_SIZE));
+        Vm::with_global_store(byte_code, Vec::with_capacity(GLOBALS_SIZE))
     }
     pub fn with_global_store(byte_code: ByteCode, globals: Globals) -> Self {
         //
@@ -89,42 +89,43 @@ impl Vm {
         while self.current_frame().ip < self.current_frame().instructions().len() {
             let frame = self.frames.last_mut().unwrap();
             let ins = frame.instructions();
-            let op_code = Opcode::from_byte(ins[frame.ip]).unwrap();
+            // let op_code = Opcode::from_byte(ins[frame.ip]).unwrap();
+            let op_code = OPS[ins[frame.ip] as usize];
             //从操作码后面一个位置开始
             frame.ip += 1;
             let ip = frame.ip;
             match op_code {
                 Opcode::Constant => {
                     let const_index = self.read_u16(&ins, ip);
-                    let constant = Rc::clone(&self.constants[const_index]);
-                    self.push_stack(constant);
+                    // let constant = self.constants[const_index].clone();
+                    self.push_stack(self.constants[const_index].clone());
                     self.current_frame_ip_inc(2);
                 }
                 Opcode::ConstantOne => {
                     let const_index = ins[ip] as usize;
-                    let constant = self.constants[const_index].clone();
-                    self.push_stack(constant);
+                    // let constant = self.constants[const_index].clone();
+                    self.push_stack(self.constants[const_index].clone());
                     self.frames.last_mut().unwrap().ip += 1;
                 }
                 Opcode::Constant0 => {
-                    let constant = self.constants[0].clone();
-                    self.push_stack(constant);
+                    // let constant = self.constants[0].clone();
+                    self.push_stack(self.constants[0].clone());
                 }
                 Opcode::Constant1 => {
-                    let constant = self.constants[1].clone();
-                    self.push_stack(constant);
+                    // let constant = self.constants[1].clone();
+                    self.push_stack(self.constants[1].clone());
                 }
                 Opcode::Constant2 => {
-                    let constant = self.constants[2].clone();
-                    self.push_stack(constant);
+                    // let constant = self.constants[2].clone();
+                    self.push_stack(self.constants[2].clone());
                 }
                 Opcode::Constant3 => {
-                    let constant = self.constants[3].clone();
-                    self.push_stack(constant);
+                    // let constant = self.constants[3].clone();
+                    self.push_stack(self.constants[3].clone());
                 }
                 Opcode::Constant4 => {
-                    let constant = self.constants[4].clone();
-                    self.push_stack(constant);
+                    // let constant = self.constants[4].clone();
+                    self.push_stack(self.constants[4].clone());
                 }
 
                 Opcode::Array => {
@@ -146,7 +147,10 @@ impl Vm {
                     self.push_stack(result);
                 }
 
-                Opcode::Add | Opcode::Sub | Opcode::Mul | Opcode::Div => {
+                Opcode::Add => {
+                    self.execute_add_operation()?;
+                }
+                Opcode::Sub | Opcode::Mul | Opcode::Div => {
                     self.execute_binary_operation(&op_code)?;
                 }
 
@@ -246,7 +250,7 @@ impl Vm {
                 }
                 Opcode::GetGlobal0 => {
                     // self.get_global_and_push(0);
-                    let obj = self.globals.borrow()[0].clone();
+                    let obj = self.globals[0].clone();
                     self.push_stack(obj);
                 }
                 Opcode::GetGlobal1 => {
@@ -463,13 +467,43 @@ impl Vm {
     }
     /// # 执行二元操作
     // #[inline]
+    pub fn execute_add_operation(&mut self) -> VmResult<()> {
+        let right = self.pop_stack();
+        let left = self.pop_stack();
+        let result = match (left.as_ref(), right.as_ref()) {
+            (Object::Integer(left_val), Object::Integer(right_val)) => {
+                let r = left_val + right_val;
+                self.int_cache
+                    .get(r as usize)
+                    .cloned()
+                    .unwrap_or_else(|| Rc::new(Object::Integer(r)))
+            }
+            (Object::String(left_val), Object::String(right_val)) => {
+                Rc::new(Object::String(left_val.clone() + right_val))
+            }
+            (Object::Integer(left_val), Object::String(right_val)) => {
+                Rc::new(Object::String(left_val.to_string() + right_val))
+            }
+            (Object::String(left_val), Object::Integer(right_val)) => {
+                Rc::new(Object::String(left_val.clone() + &right_val.to_string()))
+            }
+            _ => {
+                return Err(RuntimeError::UnSupportedBinOperation(
+                    Opcode::Add,
+                    Object::clone(&left),
+                    Object::clone(&right),
+                ));
+            }
+        };
+        self.push_stack(result);
+        Ok(())
+    }
     pub fn execute_binary_operation(&mut self, op: &Opcode) -> VmResult<()> {
         let right = &*self.pop_stack();
         let left = &*self.pop_stack();
         let result = match (left, right) {
             (Object::Integer(left_val), Object::Integer(right_val)) => {
                 let r = match op {
-                    Opcode::Add => left_val + right_val,
                     Opcode::Sub => left_val - right_val,
                     Opcode::Mul => left_val * right_val,
                     Opcode::Div => {
@@ -487,39 +521,6 @@ impl Vm {
                     .get(r as usize)
                     .cloned()
                     .unwrap_or_else(|| Rc::new(Object::Integer(r)))
-            }
-            (Object::String(left_val), Object::String(right_val)) => {
-                if let Opcode::Add = op {
-                    Rc::new(Object::String(left_val.clone() + right_val))
-                } else {
-                    return Err(RuntimeError::UnSupportedBinOperation(
-                        *op,
-                        left.clone(),
-                        right.clone(),
-                    ));
-                }
-            }
-            (Object::Integer(left_val), Object::String(right_val)) => {
-                if let Opcode::Add = op {
-                    Rc::new(Object::String(left_val.to_string() + right_val))
-                } else {
-                    return Err(RuntimeError::UnSupportedBinOperation(
-                        *op,
-                        left.clone(),
-                        right.clone(),
-                    ));
-                }
-            }
-            (Object::String(left_val), Object::Integer(right_val)) => {
-                if let Opcode::Add = op {
-                    Rc::new(Object::String(left_val.clone() + &right_val.to_string()))
-                } else {
-                    return Err(RuntimeError::UnSupportedBinOperation(
-                        *op,
-                        left.clone(),
-                        right.clone(),
-                    ));
-                }
             }
             _ => {
                 return Err(RuntimeError::UnSupportedBinOperation(
@@ -672,10 +673,10 @@ impl Vm {
     /// # 栈顶元素存入全局变量
     pub fn pop_and_set_global(&mut self, global_index: usize) {
         let global = self.pop_stack();
-        if global_index >= self.globals.borrow().len() {
-            self.globals.borrow_mut().push(global);
+        if global_index >= self.globals.len() {
+            self.globals.push(global);
         } else {
-            self.globals.borrow_mut()[global_index] = global;
+            self.globals[global_index] = global;
         }
     }
     /// # 弹出栈顶元素并设置到指定位置
@@ -686,10 +687,10 @@ impl Vm {
     }
     /// # 取出全局变量
     pub fn get_global(&self, global_index: usize) -> Option<Rc<Object>> {
-        self.globals.borrow().get(global_index).cloned()
+        self.globals.get(global_index).cloned()
     }
     pub fn get_local(&mut self, local_index: usize) -> Option<Rc<Object>> {
-        let frame = self.frames.last().unwrap();
+        let frame = self.frames.last()?;
         self.stack.get(frame.base_pointer + local_index).cloned()
     }
     /// # 取出局部变量并压入栈顶

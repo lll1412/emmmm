@@ -3,13 +3,17 @@ use std::fmt::{Display, Formatter};
 pub type Instructions = Vec<u8>;
 
 macro_rules! op_build {
-    ($name:ident, [$($var: ident($($v: expr),*)),+,]) => {
+    ($name: ident, $c: literal, [$($var: ident($($v: expr),*)),+,]) => {
         #[derive(Debug, Clone, Copy, PartialEq)]
         #[repr(u8)]
         pub enum $name {
             $($var,)+
         }
-
+        pub const OPS: [$name; $c] = [
+            $(
+                $name::$var,
+            )+
+        ];
         impl $name {
             pub fn from_byte(byte: u8) -> Option<Self> {
                 match byte {
@@ -49,6 +53,7 @@ macro_rules! op_build {
 // (类名, [枚举(操作数位数), ...])
 op_build!(
     Opcode,
+    61,
     [
         // 常量
         Constant(2),
